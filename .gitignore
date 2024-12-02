@@ -19,4 +19,4 @@ dist/
 *.so
 *.dylib
 *.test
-*.out
+*.out.DS_Store
