@@ -80,7 +80,7 @@ go mod tidy
 
 3. Set up the database
 ```bash
-mysql -u root -p < safesplit_db.sql
+mysql -u root -p < database-setup.sql
 ```
 
 4. Start the server
