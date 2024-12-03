@@ -1,7 +1,7 @@
 # Safesplit
 
 <p align="center">
-  <img src="/frontend/public/safesplit-logo.png" alt="Safesplit Logo" width="100"/>
+  <img src="/frontend/public/safesplit-logo.png" alt="Safesplit Logo" width="300"/>
 </p>
 
 A web application built with Go (Gin) backend and React frontend for secure file sharing and recovery system.
