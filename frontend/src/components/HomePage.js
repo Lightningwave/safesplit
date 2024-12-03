@@ -81,72 +81,143 @@ function HomePage() {
 
         {/* Pricing Section */}
         <section id="pricing" className="w-full py-24">
-          <div className="container mx-auto max-w-[1200px] px-4">
+        <div className="container mx-auto max-w-[1200px] px-4">
             <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
-              Pricing Plans
+            Pricing Plans
             </h2>
             <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              <div className="p-8 bg-white rounded-lg border">
+            {/* Free Plan */}
+            <div className="p-8 bg-white rounded-lg border">
                 <h3 className="text-2xl font-bold text-center mb-6">Free Plan</h3>
+                <div className="text-center mb-8">
+                <span className="text-3xl font-bold">Free</span>
+                </div>
                 <ul className="space-y-4 mb-8">
-                  <li className="flex items-center">
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Up to 100MB file size</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>5 GB Storage Capacity</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>5 shares per file</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>File Operations</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>7-day file retention</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>File Management</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Basic email support</span>
-                  </li>
+                    <span>Security Features</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Data Encryption</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Activity Tracking</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                    <svg className="h-5 w-5 mr-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>File Sharing</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                    <svg className="h-5 w-5 mr-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>File Recovery</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                    <svg className="h-5 w-5 mr-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>Fast Download</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                    <svg className="h-5 w-5 mr-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>Premium Features</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                    <svg className="h-5 w-5 mr-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>Priority Customer Support</span>
+                </li>
                 </ul>
                 <button 
-                  onClick={() => navigate('/register')}
-                  className="w-full py-2 border border-black rounded hover:bg-gray-50 transition-colors"
+                onClick={() => navigate('/register')}
+                className="w-full py-2 border border-black rounded hover:bg-gray-50 transition-colors"
                 >
-                  Get Started
+                Get Started
                 </button>
-              </div>
+            </div>
 
-              <div className="p-8 bg-white rounded-lg border-2 border-black">
+            {/* Premium Plan */}
+            <div className="p-8 bg-white rounded-lg border-2 border-black">
                 <h3 className="text-2xl font-bold text-center mb-6">Premium Plan</h3>
+                <div className="text-center mb-8">
+                <span className="text-3xl font-bold">$8.99</span>
+                <span className="text-gray-500">/month</span>
+                </div>
                 <ul className="space-y-4 mb-8">
-                  <li className="flex items-center">
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Up to 10GB file size</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>50 GB Storage Capacity</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Unlimited shares per file</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>File Operations</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>30-day file retention</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>File Management</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Priority support</span>
-                  </li>
-                  <li className="flex items-center">
+                    <span>Security Features</span>
+                </li>
+                <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Advanced security features</span>
-                  </li>
+                    <span>Data Encryption</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Activity Tracking</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>File Sharing</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>File Recovery</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Fast Download</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Premium Features</span>
+                </li>
+                <li className="flex items-center">
+                    <Check className="h-5 w-5 mr-3 text-green-500" />
+                    <span>Priority Customer Support</span>
+                </li>
                 </ul>
                 <button
-                  onClick={() => navigate('/register')}
-                  className="w-full py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                onClick={() => navigate('/register')}
+                className="w-full py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
                 >
-                  Upgrade to Premium
+                Upgrade to Premium
                 </button>
-              </div>
             </div>
-          </div>
+            </div>
+        </div>
         </section>
 
         {/* CTA Section */}

@@ -8,37 +8,43 @@ function AboutPage() {
       name: "HO RONG HUI",
       role: "Leader / Backend Developer",
       bio: "Guides the team to achieve project goals. Develops server-side systems and creates essential documentation.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 1.png",
+      github: "https://github.com/username1"
     },
     {
       name: "CHEN XIAOJUAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 5.png",
+      github: "https://github.com/username2"
     },
     {
       name: "LAI NIM LOONG RYAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 3.png",
+      github: "https://github.com/username3"
     },
     {
       name: "PANG WAI PIN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 4.png",
+      github: "https://github.com/username4"
     },
     {
       name: "VAN LE NGUYEN",
       role: "Full Stack Developer",
       bio: "Creates and updates essential documentation. Develops both front-end and backend components of the website.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 2.png",
+      github: "https://github.com/username5"
     },
     {
       name: "ZENG LIHONG",
       role: "Backend Developer",
       bio: "Creates and updates essential documentation. Develops server-side systems.",
-      image: "/api/placeholder/400/400"
+      image: "/sample 6.png",
+      github: "https://github.com/username6"
     }
   ];
 
@@ -68,18 +74,31 @@ function AboutPage() {
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {team.map((member) => (
-                <div key={member.name} className="bg-white rounded-lg overflow-hidden shadow-sm">
-                  <img 
-                    src={member.image} 
-                    alt={member.name} 
-                    className="w-full aspect-square object-cover"
-                  />
+                <div key={member.name} className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  {/* Image container with fixed dimensions */}
+                  <div className="relative w-full h-64">
+                    <img 
+                      src={member.image} 
+                      alt={member.name} 
+                      className="w-full h-full object-cover" 
+                      style={{ objectPosition: 'center top' }}
+                      onError={(e) => {
+                        e.target.src = "/placeholder.png";
+                        e.target.onerror = null;
+                      }}
+                    />
+                  </div>
                   <div className="p-6">
                     <h3 className="text-xl font-bold mb-1">{member.name}</h3>
                     <p className="text-sm text-gray-600 mb-4">{member.role}</p>
                     <p className="text-gray-600 mb-6">{member.bio}</p>
                     <div className="flex">
-                      <a href="#" className="text-gray-600 hover:text-black">
+                      <a 
+                        href={member.github} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-gray-600 hover:text-black transition-colors"
+                      >
                         <Github className="h-5 w-5" />
                       </a>
                     </div>
