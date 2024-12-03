@@ -98,10 +98,40 @@ cd ../frontend
 
 2. Install dependencies
 ```bash
-npm install
+# Core dependencies
+npm install react-router-dom   # For routing
+npm install lucide-react       # For icons
+
+# Development dependencies
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p       # Initialize Tailwind CSS
+
+# Optional: if you want animations
+npm install framer-motion     # For animations
 ```
 
-3. Start the development server
+3. Configure Tailwind CSS - Update `tailwind.config.js`:
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+```
+
+4. Update `src/index.css`:
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+5. Start the development server
 ```bash
 npm start
 ```
