@@ -1,5 +1,7 @@
 # Safesplit
 
+![Safesplit Logo](/frontend/public/safesplit-logo.png?raw=true "Safesplit Logo")
+
 A web application built with Go (Gin) backend and React frontend for secure file sharing and recovery system.
 
 ## Tech Stack
