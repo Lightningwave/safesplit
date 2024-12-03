@@ -58,7 +58,7 @@ safesplit/
 ### Backend Setup
 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/safesplit.git
+git clone https://github.com/Lightningwave/safesplit.git
 cd safesplit/backend
 ```
 
