@@ -15,7 +15,7 @@ A web application built with Go (Gin) backend and React frontend for secure file
 - React
 - Tailwind CSS
 
-## Project Structure
+## Project Structure Model-View(React frontend)-Controller
 ```
 safesplit/
 ├── backend/
