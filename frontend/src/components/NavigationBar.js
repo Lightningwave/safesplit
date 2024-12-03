@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Shield } from 'lucide-react';
 
 function NavigationBar({ user, onLogout }) {
   const location = useLocation();
@@ -21,7 +20,11 @@ function NavigationBar({ user, onLogout }) {
     <header className="px-4 lg:px-6 h-14 flex items-center border-b">
       <div className="container mx-auto max-w-[1200px] flex items-center justify-between">
         <Link to="/" className="flex items-center">
-          <Shield className="h-6 w-6" />
+          <img 
+            src="/safesplit-logo.png" 
+            alt="Safesplit Logo" 
+            className="h-10 w-auto"
+          />
           <span className="ml-2 font-bold text-xl">Safesplit</span>
         </Link>
         
