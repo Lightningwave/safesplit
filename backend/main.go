@@ -4,6 +4,8 @@ import (
 	"log"
 	"safesplit/config"
 	"safesplit/controllers"
+	"safesplit/middleware"
+	"safesplit/models"
 	"safesplit/routes"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +17,13 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Initialize models
+	userModel := models.NewUserModel(db)
+
 	// Initialize controllers
-	loginController := controllers.NewLoginController(db)
-	logoutController := controllers.NewLogoutController(db)
-	userController := controllers.NewUserController(db)
+	loginController := controllers.NewLoginController(userModel)
+	logoutController := controllers.NewLogoutController(userModel)
+	createAccountController := controllers.NewCreateAccountController(userModel)
 
 	router := gin.Default()
 
@@ -34,7 +39,10 @@ func main() {
 		c.Next()
 	})
 
-	routes.SetupRoutes(router, loginController, logoutController, userController)
+	// Auth middleware
+	router.Use(middleware.AuthMiddleware())
+
+	routes.SetupRoutes(router, loginController, logoutController, createAccountController)
 
 	log.Println("Server starting on :8080")
 	router.Run(":8080")

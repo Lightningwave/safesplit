@@ -6,15 +6,14 @@ import (
 	"safesplit/models"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type LoginController struct {
-	db *gorm.DB
+	userModel *models.UserModel
 }
 
-func NewLoginController(db *gorm.DB) *LoginController {
-	return &LoginController{db: db}
+func NewLoginController(userModel *models.UserModel) *LoginController {
+	return &LoginController{userModel: userModel}
 }
 
 func (c *LoginController) Login(ctx *gin.Context) {
@@ -29,7 +28,7 @@ func (c *LoginController) Login(ctx *gin.Context) {
 	}
 
 	// Authenticate user
-	user, err := models.AuthenticateUser(c.db, loginReq.Email, loginReq.Password)
+	user, err := c.userModel.Authenticate(loginReq.Email, loginReq.Password)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
@@ -49,4 +48,17 @@ func (c *LoginController) Login(ctx *gin.Context) {
 		"token": token,
 		"user":  user,
 	})
+}
+
+func (c *LoginController) GetMe(ctx *gin.Context) {
+	userID := ctx.GetUint("user_id")
+
+	user, err := c.userModel.FindByID(userID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	user.Password = "" // Clear sensitive data
+	ctx.JSON(http.StatusOK, user)
 }

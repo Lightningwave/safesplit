@@ -26,66 +26,69 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-// Authenticate user
-func AuthenticateUser(db *gorm.DB, email, password string) (*User, error) {
-	var user User
+type UserModel struct {
+	db *gorm.DB
+}
 
-	// Find user by email
-	if err := db.Where("email = ?", email).First(&user).Error; err != nil {
+func NewUserModel(db *gorm.DB) *UserModel {
+	return &UserModel{db: db}
+}
+
+// AuthenticateUser checks the provided email and password against the database
+func (m *UserModel) Authenticate(email, password string) (*User, error) {
+	var user User
+	if err := m.db.Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, errors.New("invalid credentials")
 	}
-
-	// Check password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return nil, errors.New("invalid credentials")
 	}
-
 	return &user, nil
 }
 
-// Database operations
-func (u *User) Create(db *gorm.DB) error {
-	// Set default role if not specified
-	if u.Role == "" {
-		u.Role = RoleEndUser
+// Create creates a new user in the database
+func (m *UserModel) Create(user *User) (*User, error) {
+	if err := m.db.Create(user).Error; err != nil {
+		return nil, err
 	}
-
-	// Hash password before saving
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	u.Password = string(hashedPassword)
-
-	return db.Create(u).Error
+	return user, nil
 }
 
+// FindByEmail retrieves a user by their email
 func (u *User) FindByEmail(db *gorm.DB, email string) error {
 	return db.Where("email = ?", email).First(u).Error
 }
 
-func (u *User) FindByID(db *gorm.DB, id uint) error {
-	return db.First(u, id).Error
+// FindByID retrieves a user by their ID
+func (m *UserModel) FindByID(id uint) (*User, error) {
+	var user User
+	if err := m.db.First(&user, id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
-// Helper methods for role checks
+// IsEndUser checks if the user has the "end_user" role
 func (u *User) IsEndUser() bool {
 	return u.Role == RoleEndUser
 }
 
+// IsPremiumUser checks if the user has the "premium_user" role
 func (u *User) IsPremiumUser() bool {
 	return u.Role == RolePremiumUser
 }
 
+// IsSysAdmin checks if the user has the "sys_admin" role
 func (u *User) IsSysAdmin() bool {
 	return u.Role == RoleSysAdmin
 }
 
+// IsSuperAdmin checks if the user has the "super_admin" role
 func (u *User) IsSuperAdmin() bool {
 	return u.Role == RoleSuperAdmin
 }
 
-// Method to upgrade to premium
+// UpgradeToPremium updates the user's role to "premium_user"
 func (u *User) UpgradeToPremium(db *gorm.DB) error {
 	u.Role = RolePremiumUser
 	return db.Save(u).Error

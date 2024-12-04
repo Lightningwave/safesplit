@@ -8,20 +8,20 @@ import (
 )
 
 func SetupRoutes(router *gin.Engine, loginController *controllers.LoginController,
-	logoutController *controllers.LogoutController, userController *controllers.UserController) {
+	logoutController *controllers.LogoutController, createAccountController *controllers.CreateAccountController) {
 
 	api := router.Group("/api")
 	{
 		// Public routes
 		api.POST("/login", loginController.Login)
-		api.POST("/register", userController.Create)
+		api.POST("/register", createAccountController.CreateAccount)
 
 		// Protected routes
 		protected := api.Group("")
 		protected.Use(middleware.AuthMiddleware())
 		{
 			protected.POST("/logout", logoutController.Logout)
-			protected.GET("/me", userController.GetMe)
+			protected.GET("/me", loginController.GetMe)
 
 			// Premium User routes
 			premium := protected.Group("/premium")

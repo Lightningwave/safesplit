@@ -2,17 +2,17 @@ package controllers
 
 import (
 	"net/http"
+	"safesplit/models"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type LogoutController struct {
-	db *gorm.DB
+	userModel *models.UserModel
 }
 
-func NewLogoutController(db *gorm.DB) *LogoutController {
-	return &LogoutController{db: db}
+func NewLogoutController(userModel *models.UserModel) *LogoutController {
+	return &LogoutController{userModel: userModel}
 }
 
 func (c *LogoutController) Logout(ctx *gin.Context) {
