@@ -6,15 +6,16 @@ import (
 	"safesplit/models"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type CreateAccountController struct {
-	db *gorm.DB
+	userModel *models.UserModel
 }
 
-func NewCreateAccountController(db *gorm.DB) *CreateAccountController {
-	return &CreateAccountController{db: db}
+func NewCreateAccountController(userModel *models.UserModel) *CreateAccountController {
+	return &CreateAccountController{
+		userModel: userModel,
+	}
 }
 
 // CreateAccount handles user registration
@@ -25,21 +26,22 @@ func (c *CreateAccountController) CreateAccount(ctx *gin.Context) {
 		return
 	}
 
-	// Business logic before creation
+	// Validate user input before creating the user
 	if err := c.validateUserInput(&user); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Interact with the User model to create the user in the database
-	if err := user.Create(c.db); err != nil {
+	// Create the user in the database using the UserModel
+	createdUser, err := c.userModel.Create(&user)
+	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Clear sensitive data before sending the response
-	user.Password = ""
-	ctx.JSON(http.StatusCreated, user)
+	createdUser.Password = ""
+	ctx.JSON(http.StatusCreated, createdUser)
 }
 
 // validateUserInput contains business logic for validating user input
