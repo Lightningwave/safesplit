@@ -15,8 +15,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Initialize controllers
+	loginController := controllers.NewLoginController(db)
+	logoutController := controllers.NewLogoutController(db)
 	userController := controllers.NewUserController(db)
-	authController := controllers.NewAuthController(db)
 
 	router := gin.Default()
 
@@ -32,7 +34,8 @@ func main() {
 		c.Next()
 	})
 
-	routes.SetupRoutes(router, userController, authController)
+	routes.SetupRoutes(router, loginController, logoutController, userController)
 
+	log.Println("Server starting on :8080")
 	router.Run(":8080")
 }
