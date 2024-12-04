@@ -26,8 +26,9 @@ safesplit/
 │   ├── config/
 │   │   └── database.go
 │   ├── controllers/
-│   │   ├── auth_controller.go
-│   │   └── user_controller.go
+│   │   ├── LoginController.go
+│   │   └── LogoutController.go
+│   │   └── CreateAccountController.go
 │   ├── models/
 │   │   └── user.go
 │   ├── routes/
