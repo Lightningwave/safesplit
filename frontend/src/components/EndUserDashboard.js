@@ -1,145 +1,144 @@
 // src/components/EndUserDashboard.js
 import React from 'react';
-import { Activity, CreditCard, Users, TrendingUp } from 'lucide-react';
+import { File, Settings, MoreVertical } from 'lucide-react';
 import SideNavigation from './SideNavigation';
 
 const EndUserDashboard = ({ user, onLogout }) => {
-  const stats = [
-    { id: 1, name: 'Total Transactions', value: '24', icon: <Activity className="w-6 h-6" /> },
-    { id: 2, name: 'Active Splits', value: '3', icon: <Users className="w-6 h-6" /> },
-    { id: 3, name: 'Monthly Spending', value: '$1,234', icon: <CreditCard className="w-6 h-6" /> },
-    { id: 4, name: 'Split Success Rate', value: '95%', icon: <TrendingUp className="w-6 h-6" /> },
+  const folders = [
+    { id: 1, name: 'Folder One' },
+    { id: 2, name: 'Folder Two' },
   ];
 
-  const recentActivities = [
-    { id: 1, type: 'Payment', description: 'Split bill at Restaurant XYZ', amount: '$45.00', date: '2024-12-05' },
-    { id: 2, type: 'Split', description: 'Created new split with John and Sarah', amount: '$120.00', date: '2024-12-04' },
-    { id: 3, type: 'Payment', description: 'Utilities split with roommates', amount: '$85.00', date: '2024-12-03' },
+  const recentFiles = [
+    { 
+      id: 1, 
+      name: 'Security_Audit_Reports.txt',
+      size: '9 MB',
+      type: 'Documents',
+      lastModified: 'October 4, 2024',
+      selected: true
+    },
+    { 
+      id: 2, 
+      name: 'Security_Note_Findings.doc',
+      size: '17 MB',
+      type: 'Documents',
+      lastModified: 'October 4, 2024',
+      selected: false
+    },
+    { 
+      id: 3, 
+      name: 'Security_Compliance_Checklist.xls',
+      size: '644 KB',
+      type: 'Documents',
+      lastModified: 'October 4, 2024',
+      selected: false
+    },
+    { 
+      id: 4, 
+      name: 'Security_Incident_Report.pdf',
+      size: '2 MB',
+      type: 'Documents',
+      lastModified: 'October 4, 2024',
+      selected: false
+    },
   ];
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <SideNavigation user={user} onLogout={onLogout} />
-      
+    <div className="flex h-screen bg-white">
+      {/* Dark Sidebar */}
+      <div className="w-64 bg-gray-700 text-white">
+        <div className="p-4 border-b border-gray-600">
+          <img src="/safesplit-logo.png" alt="Logo" className="h-6" />
+        </div>
+        <nav className="p-4">
+          <ul className="space-y-2">
+            <li className="bg-gray-600 rounded">
+              <a href="#" className="block px-4 py-2">Dashboard</a>
+            </li>
+            <li>
+              <a href="#" className="block px-4 py-2">Files</a>
+            </li>
+            <li>
+              <a href="#" className="block px-4 py-2">Settings</a>
+            </li>
+          </ul>
+        </nav>
+        <div className="absolute bottom-0 w-64 border-t border-gray-600">
+          <div className="p-4">
+            <a href="#" className="block px-4 py-2">Contact Us</a>
+            <button onClick={onLogout} className="block w-full text-left px-4 py-2">
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <div className="flex-1 ml-64 p-8">
-        <div className="space-y-6">
-          {/* Welcome Section */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">Welcome back, {user.username}!</h1>
-              <p className="text-gray-600">Here's what's happening with your splits</p>
+      <div className="flex-1 overflow-auto">
+        <div className="p-8">
+          <h1 className="text-2xl font-semibold mb-6">My Dashboard</h1>
+
+          {/* Folders Section */}
+          <div className="mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Folders</h2>
+              <button className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200">
+                New Folder
+              </button>
+            </div>
+            <div className="grid grid-cols-6 gap-4">
+              {folders.map(folder => (
+                <div key={folder.id} className="p-4 border-2 border-dashed rounded-lg hover:border-gray-400 cursor-pointer">
+                  <div className="aspect-square flex items-center justify-center">
+                    <File size={40} className="text-gray-400" />
+                  </div>
+                  <p className="text-center mt-2 text-sm">{folder.name}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map((stat) => (
-              <div key={stat.id} className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-gray-500">{stat.icon}</div>
-                  <span className="text-2xl font-bold">{stat.value}</span>
+          {/* Recents Section */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Recents</h2>
+            <div className="border rounded-lg">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
+                <div className="col-span-5">
+                  <div className="flex items-center space-x-4">
+                    <input type="checkbox" className="rounded" />
+                    <span>Name</span>
+                  </div>
                 </div>
-                <div className="mt-2 text-sm text-gray-600">{stat.name}</div>
+                <div className="col-span-2">Size</div>
+                <div className="col-span-2">Folder</div>
+                <div className="col-span-2">Last Modified</div>
+                <div className="col-span-1"></div>
               </div>
-            ))}
-          </div>
 
-          {/* Recent Activities */}
-          <div className="bg-white rounded-lg shadow-sm">
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">Recent Activities</h2>
-              <div className="space-y-4">
-                {recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between border-b pb-4 last:border-0">
-                    <div>
-                      <p className="font-medium">{activity.description}</p>
-                      <p className="text-sm text-gray-600">{activity.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{activity.amount}</p>
-                      <p className="text-sm text-gray-600">{activity.type}</p>
+              {/* Table Body */}
+              {recentFiles.map(file => (
+                <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
+                  <div className="col-span-5">
+                    <div className="flex items-center space-x-4">
+                      <input type="checkbox" checked={file.selected} className="rounded" />
+                      <File size={20} className="text-gray-400" />
+                      <span>{file.name}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* User Profile Section */}
-          <div className="bg-white rounded-lg shadow-sm">
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">Your Profile</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-gray-600">Username</p>
-                  <p className="font-medium">{user.username}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Email</p>
-                  <p className="font-medium">{user.email}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Account Type</p>
-                  <p className="font-medium">{user.role.replace('_', ' ').toUpperCase()}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Member Since</p>
-                  <p className="font-medium">
-                    {new Date(user.created_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm">
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button className="p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-                  Create New Split
-                </button>
-                <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                  Send Payment
-                </button>
-                <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
-                  View All Transactions
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Split Groups */}
-          <div className="bg-white rounded-lg shadow-sm">
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">Active Split Groups</h2>
-              <div className="space-y-4">
-                {[
-                  { id: 1, name: 'Roommates', members: 4, total: '$350', due: '2024-12-10' },
-                  { id: 2, name: 'Trip to Vegas', members: 6, total: '$1,200', due: '2024-12-15' },
-                  { id: 3, name: 'Weekly Lunch', members: 3, total: '$45', due: '2024-12-08' },
-                ].map((group) => (
-                  <div key={group.id} className="flex items-center justify-between border-b pb-4 last:border-0">
-                    <div>
-                      <p className="font-medium">{group.name}</p>
-                      <p className="text-sm text-gray-600">{group.members} members</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{group.total}</p>
-                      <p className="text-sm text-gray-600">Due: {group.due}</p>
-                    </div>
+                  <div className="col-span-2">{file.size}</div>
+                  <div className="col-span-2">{file.type}</div>
+                  <div className="col-span-2">{file.lastModified}</div>
+                  <div className="col-span-1">
+                    <button className="p-1 hover:bg-gray-100 rounded">
+                      <MoreVertical size={16} />
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
-
         </div>
       </div>
     </div>
