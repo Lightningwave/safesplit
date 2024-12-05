@@ -16,8 +16,10 @@ export const login = async (email, password) => {
             throw new Error(data.error || 'Login failed');
         }
 
+        // Store auth data
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        
         return data;
     } catch (error) {
         console.error('Login error:', error);
@@ -27,7 +29,7 @@ export const login = async (email, password) => {
 
 export const register = async (username, email, password) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/users`, {
+        const response = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -55,4 +57,24 @@ export const register = async (username, email, password) => {
 export const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+};
+
+export const getCurrentUser = () => {
+    const user = localStorage.getItem('user');
+    return user ? JSON.parse(user) : null;
+};
+
+export const getDashboardByRole = (role) => {
+    switch (role) {
+        case 'end_user':
+            return '/dashboard';
+        case 'premium_user':
+            return '/premium-dashboard';
+        case 'sys_admin':
+            return '/admin-dashboard';
+        case 'super_admin':
+            return '/super-dashboard';
+        default:
+            return '/dashboard';
+    }
 };

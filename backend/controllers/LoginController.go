@@ -60,5 +60,8 @@ func (c *LoginController) GetMe(ctx *gin.Context) {
 	}
 
 	user.Password = "" // Clear sensitive data
-	ctx.JSON(http.StatusOK, user)
+	ctx.JSON(http.StatusOK, gin.H{
+		"user": user,
+		"role": user.Role, // Explicitly include role in response
+	})
 }
