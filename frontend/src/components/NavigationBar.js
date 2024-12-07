@@ -27,7 +27,7 @@ function NavigationBar({ user, onLogout }) {
             <div className="container mx-auto max-w-[1200px] flex items-center justify-between">
                 <Link to="/" className="flex items-center">
                     <img 
-                        src="/safesplit-logo.png" 
+                        src="/safesplit-logo_nobg.png" 
                         alt="Safesplit Logo" 
                         className="h-10 w-auto"
                     />

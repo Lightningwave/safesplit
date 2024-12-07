@@ -1,20 +1,17 @@
 // src/components/EndUserDashboard.js
-import React from 'react';
-import { File, Settings, MoreVertical } from 'lucide-react';
-import SideNavigation from './SideNavigation';
+import React, { useState } from 'react';
+import { File, Settings, MoreVertical, ChevronDown, ChevronRight, Search, Upload } from 'lucide-react';
 
 const EndUserDashboard = ({ user, onLogout }) => {
-  const folders = [
-    { id: 1, name: 'Folder One' },
-    { id: 2, name: 'Folder Two' },
-  ];
+  const [isFilesOpen, setIsFilesOpen] = useState(true);
+  const [selectedSection, setSelectedSection] = useState('My Files');
 
-  const recentFiles = [
+  const files = [
     { 
       id: 1, 
-      name: 'Security_Audit_Reports.txt',
+      name: 'Security_Audit_Report.txt',
       size: '9 MB',
-      type: 'Documents',
+      folder: 'Documents',
       lastModified: 'October 4, 2024',
       selected: true
     },
@@ -22,15 +19,15 @@ const EndUserDashboard = ({ user, onLogout }) => {
       id: 2, 
       name: 'Security_Note_Findings.doc',
       size: '17 MB',
-      type: 'Documents',
+      folder: 'Documents',
       lastModified: 'October 4, 2024',
       selected: false
     },
     { 
       id: 3, 
-      name: 'Security_Compliance_Checklist.xls',
+      name: 'Security_Configuration_Checklist.xls',
       size: '644 KB',
-      type: 'Documents',
+      folder: 'Documents',
       lastModified: 'October 4, 2024',
       selected: false
     },
@@ -38,36 +35,94 @@ const EndUserDashboard = ({ user, onLogout }) => {
       id: 4, 
       name: 'Security_Incident_Report.pdf',
       size: '2 MB',
-      type: 'Documents',
+      folder: 'Documents',
       lastModified: 'October 4, 2024',
       selected: false
     },
   ];
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Dark Sidebar */}
-      <div className="w-64 bg-gray-700 text-white">
-        <div className="p-4 border-b border-gray-600">
-          <img src="/safesplit-logo.png" alt="Logo" className="h-6" />
-        </div>
+  <div className="flex h-screen bg-white">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-700 text-white">
+          <div className="p-1 border-b border-gray-600 flex justify-center items-center">
+            <img src="/safesplit-logo_white.png" alt="Logo" className="h-32 w-auto" />
+          </div>
+        
+        {/* Navigation */}
         <nav className="p-4">
           <ul className="space-y-2">
-            <li className="bg-gray-600 rounded">
-              <a href="#" className="block px-4 py-2">Dashboard</a>
-            </li>
             <li>
-              <a href="#" className="block px-4 py-2">Files</a>
+              <a href="#" className="block px-4 py-2 rounded hover:bg-gray-600">
+                Dashboard
+              </a>
             </li>
+            
+            {/* Files Dropdown */}
             <li>
-              <a href="#" className="block px-4 py-2">Settings</a>
+              <button 
+                onClick={() => setIsFilesOpen(!isFilesOpen)}
+                className="w-full flex items-center justify-between px-4 py-2 rounded hover:bg-gray-600 bg-gray-600"
+              >
+                <span>Files</span>
+                {isFilesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+              
+              {isFilesOpen && (
+                <ul className="ml-4 mt-2 space-y-1">
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={() => setSelectedSection('My Files')}
+                      className={`block px-4 py-2 rounded ${selectedSection === 'My Files' ? 'bg-gray-500' : 'hover:bg-gray-600'}`}
+                    >
+                      My Files
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={() => setSelectedSection('Uploaded Files')}
+                      className={`block px-4 py-2 rounded ${selectedSection === 'Uploaded Files' ? 'bg-gray-500' : 'hover:bg-gray-600'}`}
+                    >
+                      Uploaded Files
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={() => setSelectedSection('Shared Files')}
+                      className={`block px-4 py-2 rounded ${selectedSection === 'Shared Files' ? 'bg-gray-500' : 'hover:bg-gray-600'}`}
+                    >
+                      Shared Files
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={() => setSelectedSection('Archives')}
+                      className={`block px-4 py-2 rounded ${selectedSection === 'Archives' ? 'bg-gray-500' : 'hover:bg-gray-600'}`}
+                    >
+                      Archives
+                    </a>
+                  </li>
+                </ul>
+              )}
+            </li>
+            
+            <li>
+              <a href="#" className="block px-4 py-2 rounded hover:bg-gray-600">
+                Settings
+              </a>
             </li>
           </ul>
         </nav>
+
+        {/* Bottom Section */}
         <div className="absolute bottom-0 w-64 border-t border-gray-600">
           <div className="p-4">
-            <a href="#" className="block px-4 py-2">Contact Us</a>
-            <button onClick={onLogout} className="block w-full text-left px-4 py-2">
+            <a href="#" className="block px-4 py-2 hover:bg-gray-600 rounded">Contact Us</a>
+            <button onClick={onLogout} className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded">
               Logout
             </button>
           </div>
@@ -77,67 +132,64 @@ const EndUserDashboard = ({ user, onLogout }) => {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="p-8">
-          <h1 className="text-2xl font-semibold mb-6">My Dashboard</h1>
-
-          {/* Folders Section */}
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Folders</h2>
-              <button className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200">
-                New Folder
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-2xl font-semibold">My Files</h1>
+            <div className="flex items-center space-x-4">
+              {/* Search Bar */}
+              <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
+                <Search size={20} className="text-gray-400 mr-2" />
+                <input
+                  type="text"
+                  placeholder="Search"
+                  className="bg-transparent outline-none"
+                />
+              </div>
+              
+              {/* Upload Button */}
+              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                <Upload size={20} />
+                <span>Upload File</span>
               </button>
-            </div>
-            <div className="grid grid-cols-6 gap-4">
-              {folders.map(folder => (
-                <div key={folder.id} className="p-4 border-2 border-dashed rounded-lg hover:border-gray-400 cursor-pointer">
-                  <div className="aspect-square flex items-center justify-center">
-                    <File size={40} className="text-gray-400" />
-                  </div>
-                  <p className="text-center mt-2 text-sm">{folder.name}</p>
-                </div>
-              ))}
             </div>
           </div>
 
-          {/* Recents Section */}
-          <div>
-            <h2 className="text-lg font-semibold mb-4">Recents</h2>
-            <div className="border rounded-lg">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
+          {/* Files Table */}
+          <div className="border rounded-lg">
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
+              <div className="col-span-5">
+                <div className="flex items-center space-x-4">
+                  <input type="checkbox" className="rounded" />
+                  <span>Name</span>
+                </div>
+              </div>
+              <div className="col-span-2">Size</div>
+              <div className="col-span-2">Folder</div>
+              <div className="col-span-2">Last Modified</div>
+              <div className="col-span-1"></div>
+            </div>
+
+            {/* Table Body */}
+            {files.map(file => (
+              <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
                 <div className="col-span-5">
                   <div className="flex items-center space-x-4">
-                    <input type="checkbox" className="rounded" />
-                    <span>Name</span>
+                    <input type="checkbox" checked={file.selected} className="rounded" />
+                    <File size={20} className="text-gray-400" />
+                    <span>{file.name}</span>
                   </div>
                 </div>
-                <div className="col-span-2">Size</div>
-                <div className="col-span-2">Folder</div>
-                <div className="col-span-2">Last Modified</div>
-                <div className="col-span-1"></div>
+                <div className="col-span-2">{file.size}</div>
+                <div className="col-span-2">{file.folder}</div>
+                <div className="col-span-2">{file.lastModified}</div>
+                <div className="col-span-1">
+                  <button className="p-1 hover:bg-gray-100 rounded">
+                    <MoreVertical size={16} />
+                  </button>
+                </div>
               </div>
-
-              {/* Table Body */}
-              {recentFiles.map(file => (
-                <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
-                  <div className="col-span-5">
-                    <div className="flex items-center space-x-4">
-                      <input type="checkbox" checked={file.selected} className="rounded" />
-                      <File size={20} className="text-gray-400" />
-                      <span>{file.name}</span>
-                    </div>
-                  </div>
-                  <div className="col-span-2">{file.size}</div>
-                  <div className="col-span-2">{file.type}</div>
-                  <div className="col-span-2">{file.lastModified}</div>
-                  <div className="col-span-1">
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
       </div>
