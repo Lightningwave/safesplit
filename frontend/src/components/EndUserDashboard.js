@@ -1,4 +1,3 @@
-// src/components/EndUserDashboard.js
 import React, { useState } from 'react';
 import { File, Settings, MoreVertical, ChevronDown, ChevronRight, Search, Upload } from 'lucide-react';
 
