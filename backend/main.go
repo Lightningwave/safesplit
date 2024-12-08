@@ -4,17 +4,18 @@ import (
 	"log"
 	"safesplit/config"
 	"safesplit/controllers"
-	"safesplit/middleware"
 	"safesplit/models"
 	"safesplit/routes"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// Initialize database
 	db, err := config.SetupDatabase()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 
 	// Initialize models
@@ -22,28 +23,33 @@ func main() {
 
 	// Initialize controllers
 	loginController := controllers.NewLoginController(userModel)
-	logoutController := controllers.NewLogoutController(userModel)
 	createAccountController := controllers.NewCreateAccountController(userModel)
 
+	// Setup Gin router
 	router := gin.Default()
 
-	// CORS middleware
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
+	// Configure CORS
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"http://localhost:3000"} // Add your frontend URL
+	corsConfig.AllowCredentials = true
+	corsConfig.AllowHeaders = []string{
+		"Origin",
+		"Content-Type",
+		"Accept",
+		"Authorization",
+		"X-Requested-With",
+	}
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 
-	// Auth middleware
-	router.Use(middleware.AuthMiddleware())
+	router.Use(cors.New(corsConfig))
 
-	routes.SetupRoutes(router, loginController, logoutController, createAccountController)
+	// Setup routes
+	routes.SetupRoutes(router, loginController, createAccountController)
 
-	log.Println("Server starting on :8080")
-	router.Run(":8080")
+	// Start server
+	port := ":8080"
+	log.Printf("Server starting on %s", port)
+	if err := router.Run(port); err != nil {
+		log.Fatal("Failed to start server:", err)
+	}
 }

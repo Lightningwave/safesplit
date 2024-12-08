@@ -7,42 +7,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(router *gin.Engine, loginController *controllers.LoginController,
-	logoutController *controllers.LogoutController, createAccountController *controllers.CreateAccountController) {
+func SetupRoutes(router *gin.Engine,
+	loginController *controllers.LoginController,
+	createAccountController *controllers.CreateAccountController) {
 
 	api := router.Group("/api")
 	{
-		// Public routes
+		// Public routes (no authentication required)
 		api.POST("/login", loginController.Login)
 		api.POST("/register", createAccountController.CreateAccount)
 
-		// Protected routes
+		// Protected routes (require authentication)
 		protected := api.Group("")
 		protected.Use(middleware.AuthMiddleware())
 		{
-			protected.POST("/logout", logoutController.Logout)
+			// User profile routes
 			protected.GET("/me", loginController.GetMe)
-
-			// Premium User routes
-			premium := protected.Group("/premium")
-			premium.Use(middleware.RequirePremiumUser())
-			{
-				// Add premium routes here
-			}
-
-			// System Admin routes
-			sysAdmin := protected.Group("/admin")
-			sysAdmin.Use(middleware.RequireSysAdmin())
-			{
-				// Add system admin routes here
-			}
-
-			// Super Admin routes
-			superAdmin := protected.Group("/super")
-			superAdmin.Use(middleware.RequireSuperAdmin())
-			{
-				// Add super admin routes here
-			}
 		}
 	}
 }
