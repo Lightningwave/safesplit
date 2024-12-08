@@ -109,6 +109,7 @@ npm install lucide-react       # For icons
 
 # Development dependencies
 npm install -D tailwindcss postcss autoprefixer
+npm install @tailwindcss/aspect-ratio # For demo video aspect ratio
 npx tailwindcss init -p       # Initialize Tailwind CSS
 
 # Optional: if you want animations
@@ -125,7 +126,9 @@ module.exports = {
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/aspect-ratio'),
+  ],
 }
 ```
 
