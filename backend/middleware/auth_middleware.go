@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"safesplit/config"
+	"safesplit/models"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -46,8 +47,78 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", uint(claims["user_id"].(float64)))
-		c.Set("user_role", claims["role"].(string))
+		// Get user ID from claims
+		userID := uint(claims["user_id"].(float64))
+
+		// Fetch full user object from database
+		user, err := userModel.FindByID(userID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			c.Abort()
+			return
+		}
+
+		// Check if user is active
+		if !user.IsActive {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Account is deactivated"})
+			c.Abort()
+			return
+		}
+
+		// Store full user object in context
+		c.Set("user", user)
+		c.Next()
+	}
+}
+
+func SuperAdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		currentUser, ok := user.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user data"})
+			c.Abort()
+			return
+		}
+
+		if !currentUser.IsSuperAdmin() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Super admin access required"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func SysAdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		currentUser, ok := user.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user data"})
+			c.Abort()
+			return
+		}
+
+		if !currentUser.IsSysAdmin() && !currentUser.IsSuperAdmin() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }
