@@ -34,11 +34,13 @@ type User struct {
 	ID                 uint       `json:"id" gorm:"primaryKey"`
 	Username           string     `json:"username" gorm:"unique;not null"`
 	Email              string     `json:"email" gorm:"unique;not null"`
-	Password           string     `json:"-" gorm:"not null"` // "-" to exclude from JSON
+	Password           string     `json:"-" gorm:"not null"`
 	Role               string     `json:"role" gorm:"type:enum('end_user','premium_user','sys_admin','super_admin');default:'end_user'"`
+	ReadAccess         bool       `json:"read_access" gorm:"default:true"`
+	WriteAccess        bool       `json:"write_access" gorm:"default:true"`
 	TwoFactorEnabled   bool       `json:"two_factor_enabled" gorm:"default:false"`
-	TwoFactorSecret    string     `json:"-" gorm:"column:two_factor_secret"`       // "-" for security
-	StorageQuota       int64      `json:"storage_quota" gorm:"default:5368709120"` // 5GB default
+	TwoFactorSecret    string     `json:"-" gorm:"column:two_factor_secret"`
+	StorageQuota       int64      `json:"storage_quota" gorm:"default:5368709120"`
 	StorageUsed        int64      `json:"storage_used" gorm:"default:0"`
 	SubscriptionStatus string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
 	IsActive           bool       `json:"is_active" gorm:"default:true"`
@@ -188,6 +190,208 @@ func (m *UserModel) CreateSysAdmin(creator *User, newAdmin *User) (*User, error)
 	}
 
 	return newAdmin, nil
+}
+
+// View Sys admin account
+func (m *UserModel) GetSysAdmins(creator *User) ([]*User, error) {
+	if !creator.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only super admins can view system administrators")
+	}
+
+	var sysAdmins []*User
+	err := m.db.Where("role = ?", RoleSysAdmin).Find(&sysAdmins).Error
+	if err != nil {
+		return nil, fmt.Errorf("error fetching system administrators: %v", err)
+	}
+
+	return sysAdmins, nil
+}
+
+// Delete Sysadmin account
+func (m *UserModel) DeleteSysAdmin(superAdmin *User, sysAdminID uint) error {
+	if !superAdmin.IsSuperAdmin() {
+		return errors.New("unauthorized: only super admins can delete system administrators")
+	}
+
+	// Get the system administrator to be deleted
+	var sysAdmin User
+	if err := m.db.First(&sysAdmin, sysAdminID).Error; err != nil {
+		return errors.New("system administrator not found")
+	}
+
+	// Verify that the target user is actually a system administrator
+	if !sysAdmin.IsSysAdmin() {
+		return errors.New("specified user is not a system administrator")
+	}
+
+	// Prevent super admin from deleting themselves
+	if sysAdmin.ID == superAdmin.ID {
+		return errors.New("cannot delete your own account")
+	}
+
+	// Perform a soft delete (deactivate the account)
+	sysAdmin.IsActive = false
+	if err := m.db.Save(&sysAdmin).Error; err != nil {
+		return fmt.Errorf("failed to deactivate system administrator: %v", err)
+	}
+
+	return nil
+}
+
+// UpdateUserAccess updates a user's access permissions
+func (m *UserModel) UpdateUserAccess(sysAdmin *User, userID uint, readAccess, writeAccess bool) error {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return errors.New("unauthorized: only administrators can update user access")
+	}
+
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Prevent modification of admin accounts
+	if user.IsSysAdmin() || user.IsSuperAdmin() {
+		return errors.New("cannot modify administrator access permissions")
+	}
+
+	// Update access permissions
+	if err := m.db.Model(&user).Updates(map[string]interface{}{
+		"read_access":  readAccess,
+		"write_access": writeAccess,
+	}).Error; err != nil {
+		return fmt.Errorf("failed to update user access: %v", err)
+	}
+
+	return nil
+}
+
+// DeleteUser performs a soft delete of a user account
+func (m *UserModel) DeleteUser(sysAdmin *User, userID uint) error {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return errors.New("unauthorized: only administrators can delete user accounts")
+	}
+
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Prevent deletion of admin accounts
+	if user.IsSysAdmin() || user.IsSuperAdmin() {
+		return errors.New("cannot delete administrator accounts")
+	}
+
+	if err := user.DeactivateAccount(m.db); err != nil {
+		return fmt.Errorf("failed to delete user account: %v", err)
+	}
+
+	return nil
+}
+
+// GetAllUsers retrieves all user accounts excluding administrators
+func (m *UserModel) GetAllUsers(sysAdmin *User) ([]*User, error) {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only administrators can view all users")
+	}
+
+	var users []*User
+	err := m.db.Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).Find(&users).Error
+	if err != nil {
+		return nil, fmt.Errorf("error fetching users: %v", err)
+	}
+
+	return users, nil
+}
+
+// GetStorageUsage retrieves storage usage statistics
+func (m *UserModel) GetStorageUsage(sysAdmin *User) (map[string]interface{}, error) {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only administrators can view storage usage")
+	}
+
+	var totalUsed int64
+	var totalQuota int64
+	var userCount int64
+	var activeUsers int64
+
+	err := m.db.Model(&User{}).
+		Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).
+		Select("COUNT(*) as user_count, "+
+			"SUM(storage_used) as total_used, "+
+			"SUM(storage_quota) as total_quota, "+
+			"SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_users").
+		Row().Scan(&userCount, &totalUsed, &totalQuota, &activeUsers)
+
+	if err != nil {
+		return nil, fmt.Errorf("error fetching storage statistics: %v", err)
+	}
+
+	return map[string]interface{}{
+		"total_users":   userCount,
+		"active_users":  activeUsers,
+		"storage_used":  totalUsed,
+		"storage_quota": totalQuota,
+		"usage_percent": float64(totalUsed) / float64(totalQuota) * 100,
+	}, nil
+}
+
+// GetSubscriptionDetails retrieves subscription and billing information
+func (m *UserModel) GetSubscriptionDetails(sysAdmin *User) ([]map[string]interface{}, error) {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only administrators can view subscription details")
+	}
+
+	var subscriptions []map[string]interface{}
+	err := m.db.Model(&User{}).
+		Select("subscription_status, COUNT(*) as count, "+
+			"SUM(storage_quota) as total_quota").
+		Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).
+		Group("subscription_status").
+		Scan(&subscriptions).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("error fetching subscription details: %v", err)
+	}
+
+	return subscriptions, nil
+}
+
+// GetDeletedUsers retrieves all deleted user accounts
+func (m *UserModel) GetDeletedUsers(sysAdmin *User) ([]*User, error) {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only administrators can view deleted users")
+	}
+
+	var users []*User
+	err := m.db.Where("is_active = ?", false).Find(&users).Error
+	if err != nil {
+		return nil, fmt.Errorf("error fetching deleted users: %v", err)
+	}
+
+	return users, nil
+}
+
+// RestoreUser restores a deleted user account
+func (m *UserModel) RestoreUser(sysAdmin *User, userID uint) error {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return errors.New("unauthorized: only administrators can restore user accounts")
+	}
+
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	if user.IsActive {
+		return errors.New("user account is already active")
+	}
+
+	// Prevent restoration of admin accounts by non-super-admins
+	if (user.IsSysAdmin() || user.IsSuperAdmin()) && !sysAdmin.IsSuperAdmin() {
+		return errors.New("cannot restore administrator accounts")
+	}
+
+	return user.ReactivateAccount(m.db)
 }
 
 // Role check methods

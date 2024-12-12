@@ -12,6 +12,8 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,            -- Unique email for notifications and recovery
     password VARCHAR(255) NOT NULL,                -- Hashed password
     role ENUM('end_user', 'premium_user', 'sys_admin', 'super_admin') NOT NULL DEFAULT 'end_user',  -- User access level
+    read_access BOOLEAN NOT NULL DEFAULT TRUE,     -- User's read permission status
+    write_access BOOLEAN NOT NULL DEFAULT TRUE,    -- User's write permission status
     two_factor_enabled BOOLEAN DEFAULT FALSE,      -- Whether 2FA is enabled
     two_factor_secret VARCHAR(255),               -- Secret key for 2FA if enabled
     storage_quota BIGINT DEFAULT 5368709120,      -- Storage limit (5GB for free users, 50GB for premium)

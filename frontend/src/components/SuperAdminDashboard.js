@@ -1,45 +1,20 @@
 import React, { useState } from 'react';
 import { Users, ChevronDown, ChevronRight, MoreVertical, Settings, FileText, UserPlus } from 'lucide-react';
-import CreateSysAdminForm from '../components/Superadmin/CreateSysAdminForm';
+import CreateSysAdminForm from './SuperAdmin/CreateSysAdminForm';
+import ViewSysAdminAccount from './SuperAdmin/ViewSysAdminAccount';
+import SystemLogs from './SuperAdmin/SystemLogs';
 
 const SuperAdminDashboard = ({ user, onLogout }) => {
   const [isSysAdminOpen, setIsSysAdminOpen] = useState(true);
   const [selectedSection, setSelectedSection] = useState('Dashboard');
-  const [sysAdmins, setSysAdmins] = useState([
-    { 
-      id: 1, 
-      name: 'John Admin', 
-      email: 'john@admin.com',
-      status: 'Active', 
-      lastActive: 'October 4, 2024',
-      selected: false 
-    },
-    { 
-      id: 2, 
-      name: 'Sarah Admin', 
-      email: 'sarah@admin.com',
-      status: 'Active', 
-      lastActive: 'October 4, 2024',
-      selected: false 
-    },
-    { 
-      id: 3, 
-      name: 'Mike Admin', 
-      email: 'mike@admin.com',
-      status: 'Inactive', 
-      lastActive: 'October 3, 2024',
-      selected: false 
-    }
-  ]);
 
   const handleQuickAction = (action) => {
     setSelectedSection(action);
   };
 
   const renderDashboardContent = () => (
-    <>
-      {/* Quick Actions */}
-      <div className="mb-8">
+    <div className="space-y-8">
+      <div>
         <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-4 gap-4">
           <div 
@@ -63,79 +38,62 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* SysAdmins Table */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">System Administrators</h2>
-        <div className="border rounded-lg">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
-            <div className="col-span-1">Select</div>
-            <div className="col-span-2">Admin ID</div>
-            <div className="col-span-3">Name</div>
-            <div className="col-span-3">Email</div>
-            <div className="col-span-1">Status</div>
-            <div className="col-span-1">Last Active</div>
-            <div className="col-span-1">Actions</div>
-          </div>
-
-          {/* Table Body */}
-          {sysAdmins.map(admin => (
-            <div key={admin.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
-              <div className="col-span-1">
-                <input 
-                  type="checkbox" 
-                  checked={admin.selected} 
-                  onChange={() => {
-                    setSysAdmins(sysAdmins.map(a => 
-                      a.id === admin.id ? { ...a, selected: !a.selected } : a
-                    ));
-                  }}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-              </div>
-              <div className="col-span-2">{admin.id}</div>
-              <div className="col-span-3">{admin.name}</div>
-              <div className="col-span-3">{admin.email}</div>
-              <div className="col-span-1">
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                  admin.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {admin.status}
-                </span>
-              </div>
-              <div className="col-span-1">{admin.lastActive}</div>
-              <div className="col-span-1">
-                <button className="p-1 hover:bg-gray-100 rounded transition-colors duration-200">
-                  <MoreVertical size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ViewSysAdminAccount />
       </div>
-    </>
+    </div>
   );
 
   const renderMainContent = () => {
     switch (selectedSection) {
       case 'Create SysAdmin':
-        return <CreateSysAdminForm onSuccess={() => setSelectedSection('Dashboard')} />;
+        return (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Create System Administrator</h2>
+              <p className="text-gray-600">Add a new system administrator account</p>
+            </div>
+            <CreateSysAdminForm onSuccess={() => setSelectedSection('Dashboard')} />
+          </div>
+        );
+      case 'View SysAdmin':
+        return (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">System Administrators</h2>
+              <p className="text-gray-600">Manage and monitor system administrator accounts</p>
+            </div>
+            <ViewSysAdminAccount />
+          </div>
+        );
+      case 'System Logs':
+        return (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">System Logs</h2>
+              <p className="text-gray-600">Monitor system activity and track important events</p>
+            </div>
+            <SystemLogs />
+          </div>
+        );
       case 'Dashboard':
         return renderDashboardContent();
       default:
-        return <div>Section under development</div>;
+        return (
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            This section is currently under development
+          </div>
+        );
     }
   };
 
   return (
     <div className="flex h-screen bg-white">
-      {/* Sidebar */}
       <div className="w-64 bg-gray-700 text-white flex flex-col">
         <div className="p-6 border-b border-gray-600 flex justify-center items-center">
-          <img src="/safesplit-logo_nobg.png" alt="Logo" className="h-24 w-auto" />
+          <img src="/safesplit-logo_white.png" alt="Logo" className="h-24 w-auto" />
         </div>
         
-        {/* Navigation */}
         <nav className="flex-1 p-4">
           <ul className="space-y-2">
             <li>
@@ -148,11 +106,11 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
               </button>
             </li>
             
-            {/* SysAdmin Management Dropdown */}
             <li>
               <button 
                 onClick={() => setIsSysAdminOpen(!isSysAdminOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 rounded hover:bg-gray-600 transition-colors duration-200"
+                className={`w-full flex items-center justify-between px-4 py-2 rounded hover:bg-gray-600 transition-colors duration-200
+                  ${selectedSection.includes('SysAdmin') ? 'bg-gray-600' : ''}`}
               >
                 <span>SysAdmin Management</span>
                 {isSysAdminOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -204,7 +162,6 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
           </ul>
         </nav>
 
-        {/* Bottom Section */}
         <div className="border-t border-gray-600 p-4">
           <button className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded transition-colors duration-200">
             Get Help
@@ -218,10 +175,8 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="p-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-semibold">Super Admin Dashboard</h1>
             <p className="text-gray-600 mt-1">Manage system administrators and monitor system activity</p>
