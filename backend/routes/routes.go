@@ -25,12 +25,12 @@ type SuperAdminHandlers struct {
 }
 
 type SysAdminHandlers struct {
-	UpdateUserAccessController       *SysAdmin.UpdateUserAccessController
+	UpdateAccountController          *SysAdmin.UpdateAccountController
 	DeleteUserAccountController      *SysAdmin.DeleteUserAccountController
 	ViewUserAccountController        *SysAdmin.ViewUserAccountController
 	ViewDeletedUserAccountController *SysAdmin.ViewDeletedUserAccountController
 	ViewUserStorageController        *SysAdmin.ViewUserStorageController
-	ViewUserSubscriptionController   *SysAdmin.ViewUserSubscriptionController
+	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
 }
 
 func NewRouteHandlers(userModel *models.UserModel, activityLogModel *models.ActivityLogModel) *RouteHandlers {
@@ -44,16 +44,14 @@ func NewRouteHandlers(userModel *models.UserModel, activityLogModel *models.Acti
 			SystemLogsController:     SuperAdmin.NewSystemLogsController(activityLogModel),
 		},
 		SysAdminHandlers: &SysAdminHandlers{
-			UpdateUserAccessController:       SysAdmin.NewUpdateUserAccessController(userModel),
+			UpdateAccountController:          SysAdmin.NewUpdateAccountController(userModel),
 			DeleteUserAccountController:      SysAdmin.NewDeleteUserAccountController(userModel),
 			ViewUserAccountController:        SysAdmin.NewViewUserAccountController(userModel),
-			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel), // Add this
+			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
-			ViewUserSubscriptionController:   SysAdmin.NewViewUserSubscriptionController(userModel),
-		},
+			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel)},
 	}
 }
-
 func SetupRoutes(
 	router *gin.Engine,
 	handlers *RouteHandlers,
@@ -97,19 +95,18 @@ func setupSuperAdminRoutes(superAdmin *gin.RouterGroup, handlers *SuperAdminHand
 }
 
 func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) {
-	// User management routes
 	userRoutes := sysAdmin.Group("/users")
 	{
 		userRoutes.GET("", handlers.ViewUserAccountController.ListUsers)
+		userRoutes.GET("/:id", handlers.ViewUserAccountDetailsController.GetUserAccountDetails)
+		userRoutes.PUT("/:id", handlers.UpdateAccountController.UpdateAccount)
 		userRoutes.DELETE("/:id", handlers.DeleteUserAccountController.DeleteUser)
-		userRoutes.PUT("/:id/access", handlers.UpdateUserAccessController.UpdateUserAccess)
 
-		// Deleted users routes
+		// Deleted users management
 		userRoutes.GET("/deleted", handlers.ViewDeletedUserAccountController.GetDeletedUsers)
 		userRoutes.POST("/deleted/:id/restore", handlers.ViewDeletedUserAccountController.RestoreUser)
 	}
 
-	// Stats routes
+	// System statistics
 	sysAdmin.GET("/storage/stats", handlers.ViewUserStorageController.GetStorageStats)
-	sysAdmin.GET("/subscription/stats", handlers.ViewUserSubscriptionController.GetSubscriptionStats)
 }

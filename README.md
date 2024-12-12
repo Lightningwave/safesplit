@@ -86,6 +86,9 @@ go mod tidy
 3. Set up the database
 ```bash
 mysql -u root -p < database-setup.sql
+# Initialize the database connection
+cd ../backend/config/database.go
+# change root:admin123 to your mysql username and password
 ```
 
 4. Start the server

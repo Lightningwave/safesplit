@@ -89,7 +89,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
   return (
     <div className="flex h-screen bg-white">
-      <div className="w-64 bg-gray-700 text-white flex flex-col">
+      <div className="w-64 bg-gray-900 text-white flex flex-col">
         <div className="p-6 border-b border-gray-600 flex justify-center items-center">
           <img src="/safesplit-logo_white.png" alt="Logo" className="h-24 w-auto" />
         </div>

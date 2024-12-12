@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -23,6 +24,27 @@ const (
 	RoleSysAdmin    = "sys_admin"
 	RoleSuperAdmin  = "super_admin"
 )
+
+// Define Subscription details
+type UserSubscriptionDetails struct {
+	Status          string
+	PaymentMethod   string
+	NextInvoiceDate string
+}
+type StorageStats struct {
+	TotalUsers  int64                `json:"total_users"`
+	ActiveUsers int64                `json:"active_users"`
+	StorageUsed int64                `json:"storage_used"`
+	Users       []UserStorageDetails `json:"users"`
+}
+
+type UserStorageDetails struct {
+	ID                 string `json:"id"`
+	Username           string `json:"username"`
+	SubscriptionStatus string `json:"subscription_status"`
+	StorageUsed        int64  `json:"storage_used"`
+	StorageTotal       int64  `json:"storage_total"`
+}
 
 // DefaultStorageQuota represents 5GB in bytes for free users
 const DefaultStorageQuota = int64(5 * 1024 * 1024 * 1024)
@@ -45,8 +67,16 @@ type User struct {
 	SubscriptionStatus string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
 	IsActive           bool       `json:"is_active" gorm:"default:true"`
 	LastLogin          *time.Time `json:"last_login"`
-	CreatedAt          time.Time  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt          time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Payment and Billing Information
+	PaymentMethod   string     `json:"payment_method" gorm:"type:varchar(50);default:'none'"`
+	BillingCycle    string     `json:"billing_cycle" gorm:"type:enum('monthly','yearly');default:'monthly'"`
+	NextBillingDate *time.Time `json:"next_billing_date"`
+	LastBillingDate *time.Time `json:"last_billing_date"`
+	BillingStatus   string     `json:"billing_status" gorm:"type:enum('active','pending','failed','cancelled');default:'pending'"`
+	CustomerID      string     `json:"customer_id,omitempty" gorm:"type:varchar(255)"`
+	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 type UserModel struct {
@@ -304,35 +334,35 @@ func (m *UserModel) GetAllUsers(sysAdmin *User) ([]*User, error) {
 }
 
 // GetStorageUsage retrieves storage usage statistics
-func (m *UserModel) GetStorageUsage(sysAdmin *User) (map[string]interface{}, error) {
-	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
-		return nil, errors.New("unauthorized: only administrators can view storage usage")
+func (m *UserModel) GetStorageStats() (*StorageStats, error) {
+	var stats StorageStats
+	var users []User
+
+	// Get all users with their storage information
+	if err := m.db.Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("error fetching users: %v", err)
 	}
 
-	var totalUsed int64
-	var totalQuota int64
-	var userCount int64
-	var activeUsers int64
+	// Calculate totals and prepare user details
+	userDetails := make([]UserStorageDetails, 0, len(users))
+	for _, user := range users {
+		stats.TotalUsers++
+		if user.IsActive {
+			stats.ActiveUsers++
+		}
+		stats.StorageUsed += user.StorageUsed
 
-	err := m.db.Model(&User{}).
-		Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).
-		Select("COUNT(*) as user_count, "+
-			"SUM(storage_used) as total_used, "+
-			"SUM(storage_quota) as total_quota, "+
-			"SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_users").
-		Row().Scan(&userCount, &totalUsed, &totalQuota, &activeUsers)
-
-	if err != nil {
-		return nil, fmt.Errorf("error fetching storage statistics: %v", err)
+		userDetails = append(userDetails, UserStorageDetails{
+			ID:                 strconv.FormatUint(uint64(user.ID), 10),
+			Username:           user.Username,
+			SubscriptionStatus: user.SubscriptionStatus,
+			StorageUsed:        user.StorageUsed,
+			StorageTotal:       user.StorageQuota,
+		})
 	}
 
-	return map[string]interface{}{
-		"total_users":   userCount,
-		"active_users":  activeUsers,
-		"storage_used":  totalUsed,
-		"storage_quota": totalQuota,
-		"usage_percent": float64(totalUsed) / float64(totalQuota) * 100,
-	}, nil
+	stats.Users = userDetails
+	return &stats, nil
 }
 
 // GetSubscriptionDetails retrieves subscription and billing information
@@ -392,6 +422,65 @@ func (m *UserModel) RestoreUser(sysAdmin *User, userID uint) error {
 	}
 
 	return user.ReactivateAccount(m.db)
+}
+
+// UpdateUserAccount updates a user's account information and privileges
+func (m *UserModel) UpdateUserAccount(sysAdmin *User, userID uint, updates *User) error {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return errors.New("unauthorized: only administrators can update user accounts")
+	}
+
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Prevent modification of admin accounts
+	if user.IsSysAdmin() || user.IsSuperAdmin() {
+		return errors.New("cannot modify administrator accounts")
+	}
+
+	// Update basic information
+	user.Username = updates.Username
+	user.Email = updates.Email
+	user.ReadAccess = updates.ReadAccess
+	user.WriteAccess = updates.WriteAccess
+
+	// Handle subscription status change if needed
+	if user.SubscriptionStatus != updates.SubscriptionStatus {
+		if err := user.UpdateSubscription(m.db, updates.SubscriptionStatus); err != nil {
+			return fmt.Errorf("failed to update subscription: %v", err)
+		}
+	}
+
+	if err := m.db.Save(&user).Error; err != nil {
+		return fmt.Errorf("failed to update user account: %v", err)
+	}
+
+	return nil
+}
+
+// Get User subscription details
+func (m *UserModel) GetUserSubscriptionDetails(sysAdmin *User, userID uint) (*UserSubscriptionDetails, error) {
+	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
+		return nil, errors.New("unauthorized: only administrators can view user subscription details")
+	}
+
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	nextInvoiceDate := ""
+	if user.NextBillingDate != nil {
+		nextInvoiceDate = user.NextBillingDate.Format("January 02, 2006")
+	}
+
+	return &UserSubscriptionDetails{
+		Status:          user.SubscriptionStatus,
+		PaymentMethod:   user.PaymentMethod,
+		NextInvoiceDate: nextInvoiceDate,
+	}, nil
 }
 
 // Role check methods

@@ -45,7 +45,7 @@ const PremiumUserDashboard = ({ user, onLogout }) => {
       {/* Sidebar */}
       <div className="w-64 bg-gray-700 text-white">
         <div className="p-6 border-b border-gray-600 flex justify-center items-center">
-          <img src="/safesplit-logo_nobg.png" alt="Logo" className="h-24 w-auto" />
+          <img src="/safesplit-logo_white.png" alt="Logo" className="h-24 w-auto" />
         </div>
         
         {/* Navigation */}

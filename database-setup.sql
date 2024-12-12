@@ -15,15 +15,24 @@ CREATE TABLE users (
     read_access BOOLEAN NOT NULL DEFAULT TRUE,     -- User's read permission status
     write_access BOOLEAN NOT NULL DEFAULT TRUE,    -- User's write permission status
     two_factor_enabled BOOLEAN DEFAULT FALSE,      -- Whether 2FA is enabled
-    two_factor_secret VARCHAR(255),               -- Secret key for 2FA if enabled
-    storage_quota BIGINT DEFAULT 5368709120,      -- Storage limit (5GB for free users, 50GB for premium)
-    storage_used BIGINT DEFAULT 0,                -- Current storage usage in bytes
+    two_factor_secret VARCHAR(255),                -- Secret key for 2FA if enabled
+    storage_quota BIGINT DEFAULT 5368709120,       -- Storage limit (5GB for free users, 50GB for premium)
+    storage_used BIGINT DEFAULT 0,                 -- Current storage usage in bytes
     subscription_status ENUM('free', 'premium', 'cancelled') DEFAULT 'free',  -- Current subscription level
-    is_active BOOLEAN DEFAULT TRUE,               -- Whether account is active
-    last_login TIMESTAMP NULL,                    -- Last successful login timestamp
+    is_active BOOLEAN DEFAULT TRUE,                -- Whether account is active
+    last_login TIMESTAMP NULL,                     -- Last successful login timestamp
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Billing-related fields
+    payment_method VARCHAR(50) DEFAULT 'none',                     -- Payment method used by the user
+    billing_cycle ENUM('monthly', 'yearly') DEFAULT 'monthly',      -- Billing cycle preference
+    next_billing_date TIMESTAMP NULL,                               -- Next scheduled billing date
+    last_billing_date TIMESTAMP NULL,                               -- Last successful billing date
+    billing_status ENUM('active', 'pending', 'failed', 'cancelled') DEFAULT 'pending',  -- Current billing status
+    customer_id VARCHAR(255)                                        -- Identifier for the customer in the payment system
 );
+
 
 -- Folders table
 -- Purpose: Manages hierarchical organization of files
