@@ -3,6 +3,7 @@ import { Settings as SettingsIcon, ChevronDown, ChevronRight, Search, Upload } f
 import UploadFile from './EndUser/UploadFile';
 import ViewFile from './EndUser/ViewFile';
 import Settings from './EndUser/Settings';
+import ContactUs from './EndUser/ContactUs';
 
 const EndUserDashboard = ({ user, onLogout }) => {
     const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -71,9 +72,9 @@ const EndUserDashboard = ({ user, onLogout }) => {
                                 onClick={() => setSelectedSection('Settings')}
                                 className={`block w-full text-left px-4 py-2 rounded ${
                                     selectedSection === 'Settings' ? 'bg-gray-600' : 'hover:bg-gray-600'
-                                } transition-colors flex items-center`}
+                                } transition-colors`}
                             >
-                                 Settings
+                                Settings
                             </button>
                         </li>
                     </ul>
@@ -81,9 +82,14 @@ const EndUserDashboard = ({ user, onLogout }) => {
 
                 <div className="absolute bottom-0 w-64 border-t border-gray-600">
                     <div className="p-4">
-                        <a href="#" className="block px-4 py-2 hover:bg-gray-600 rounded transition-colors">
+                        <button
+                            onClick={() => setSelectedSection('Contact Us')}
+                            className={`block w-full text-left px-4 py-2 hover:bg-gray-600 rounded transition-colors ${
+                                selectedSection === 'Contact Us' ? 'bg-gray-500' : ''
+                            }`}
+                        >
                             Contact Us
-                        </a>
+                        </button>
                         <button 
                             onClick={onLogout} 
                             className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded transition-colors"
@@ -98,7 +104,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
                 <div className="p-8">
                     <div className="flex justify-between items-center mb-8">
                         <h1 className="text-2xl font-semibold">{selectedSection}</h1>
-                        {selectedSection !== 'Settings' && (
+                        {selectedSection !== 'Settings' && selectedSection !== 'Contact Us' && (
                             <div className="flex items-center space-x-4">
                                 <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
                                     <Search size={20} className="text-gray-400 mr-2" />
@@ -123,12 +129,19 @@ const EndUserDashboard = ({ user, onLogout }) => {
                         )}
                     </div>
 
-                    {selectedSection === 'Settings' ? (
+                    {selectedSection === 'Settings' && (
                         <Settings user={user} />
-                    ) : (
+                    )}
+
+                    {selectedSection === 'Contact Us' && (
+                        <ContactUs onSubmit={(formData) => console.log("Form Submitted:", formData)} />
+                    )}
+
+                    {selectedSection !== 'Settings' && selectedSection !== 'Contact Us' && (
                         <ViewFile 
                             searchQuery={searchQuery}
                             user={user}
+                            selectedSection={selectedSection} // Pass the selectedSection here
                         />
                     )}
                 </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { File, Loader } from 'lucide-react';
 import FileActions from './FileActions';
 
-const ViewFile = ({ searchQuery, user }) => {
+const ViewFile = ({ searchQuery, user, selectedSection }) => {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -52,14 +52,13 @@ const ViewFile = ({ searchQuery, user }) => {
         switch (action) {
             case 'delete':
             case 'archive':
-                await fetchFiles(); // Refresh the file list
+                await fetchFiles(); // Refresh the file list after action
                 break;
             default:
                 break;
         }
     };
 
-    // Format utilities
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -77,7 +76,6 @@ const ViewFile = ({ searchQuery, user }) => {
         });
     };
 
-    // Selection handlers
     const handleFileSelection = (fileId) => {
         setSelectedFiles(prev => {
             const newSelected = new Set(prev);
@@ -99,13 +97,21 @@ const ViewFile = ({ searchQuery, user }) => {
     };
 
     // Filter files based on search query
-    const filteredFiles = searchQuery
+    let filteredFiles = searchQuery
         ? files.filter(file => 
             (file.original_name || file.name)
                 .toLowerCase()
                 .includes(searchQuery.toLowerCase())
           )
         : files;
+
+    // If the selected section is Archives, show only archived files
+    // If not Archives, show only non-archived files
+    if (selectedSection === 'Archives') {
+        filteredFiles = filteredFiles.filter(file => file.is_archived === true);
+    } else {
+        filteredFiles = filteredFiles.filter(file => file.is_archived === false);
+    }
 
     if (!user) {
         return (
@@ -138,7 +144,7 @@ const ViewFile = ({ searchQuery, user }) => {
                                 <input 
                                     type="checkbox"
                                     onChange={handleBulkSelection}
-                                    checked={selectedFiles.size === filteredFiles.length && filteredFiles.length > 0}
+                                    checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
                                     className="rounded"
                                 />
                                 <span>Name</span>
