@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"safesplit/services"
+
 	"gorm.io/gorm"
 )
 
@@ -193,6 +195,33 @@ func (m *FileModel) ArchiveFile(fileID, userID uint, ipAddress string) error {
 
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to complete archive operation: %w", err)
+	}
+
+	return nil
+}
+func (m *FileModel) CreateFileWithFragments(file *File, shares []services.KeyShare, keyFragmentModel *KeyFragmentModel) error {
+	tx := m.db.Begin()
+
+	// Create the file record
+	if err := m.CreateFile(tx, file); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create file record: %w", err)
+	}
+
+	// Save key fragments
+	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to save key fragments: %w", err)
+	}
+
+	// Update user storage
+	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update storage usage: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

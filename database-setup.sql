@@ -81,11 +81,12 @@ CREATE TABLE key_fragments (
     file_id INT NOT NULL,                         -- Associated file
     fragment_index INT NOT NULL,                  -- Position in the key reconstruction sequence
     encrypted_fragment TEXT NOT NULL,             -- The encrypted key fragment
-    holder_type ENUM('owner', 'system') NOT NULL, -- Who holds this fragment
+    holder_type VARCHAR(50) NOT NULL,             -- Who holds this fragment
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
     UNIQUE KEY unique_fragment (file_id, fragment_index)
 );
+
 
 -- File shares table
 -- Purpose: Manages password-protected file sharing

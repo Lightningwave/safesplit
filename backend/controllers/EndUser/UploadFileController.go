@@ -1,41 +1,48 @@
 package EndUser
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
-
-	//"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"safesplit/models"
+	"safesplit/services"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type UploadFileController struct {
-	db               *gorm.DB
-	fileModel        *models.FileModel
-	activityLogModel *models.ActivityLogModel
+	fileModel         *models.FileModel
+	activityLogModel  *models.ActivityLogModel
+	encryptionService *services.EncryptionService
+	shamirService     *services.ShamirService
+	keyFragmentModel  *models.KeyFragmentModel
 }
 
 func NewFileController(
-	db *gorm.DB,
 	fileModel *models.FileModel,
 	activityLogModel *models.ActivityLogModel,
+	encryptionService *services.EncryptionService,
+	shamirService *services.ShamirService,
+	keyFragmentModel *models.KeyFragmentModel,
 ) *UploadFileController {
 	return &UploadFileController{
-		db:               db,
-		fileModel:        fileModel,
-		activityLogModel: activityLogModel,
+		fileModel:         fileModel,
+		activityLogModel:  activityLogModel,
+		encryptionService: encryptionService,
+		shamirService:     shamirService,
+		keyFragmentModel:  keyFragmentModel,
 	}
 }
 
 func (c *UploadFileController) Upload(ctx *gin.Context) {
 	log.Printf("Starting file upload request")
 
-	// Retrieve the authenticated user from context
+	// Get authenticated user
 	user, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
@@ -54,17 +61,55 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		return
 	}
 
-	file, err := ctx.FormFile("file")
+	// Get uploaded file
+	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
 		log.Printf("Error receiving file: %v", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
-			"error":  fmt.Sprintf("Error receiving file: %v", err),
+			"error":  "No file was provided",
 		})
 		return
 	}
 
-	log.Printf("Received file: %s, size: %d bytes", file.Filename, file.Size)
+	// Read file content
+	src, err := fileHeader.Open()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to read file",
+		})
+		return
+	}
+	defer src.Close()
+
+	content, err := io.ReadAll(src)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to read file content",
+		})
+		return
+	}
+
+	// Calculate file hash
+	hash := sha256.Sum256(content)
+	fileHash := base64.StdEncoding.EncodeToString(hash[:])
+
+	// Define n and k for Shamir's Secret Sharing
+	n := 2
+	k := 2
+
+	// Encrypt file
+	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(content, n, k)
+	if err != nil {
+		log.Printf("Encryption failed: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to encrypt file",
+		})
+		return
+	}
 
 	// Ensure storage directory exists
 	storageDir := filepath.Join("storage", "files")
@@ -72,59 +117,58 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		log.Printf("Failed to create storage directory: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  fmt.Sprintf("Storage error: %v", err),
+			"error":  "Failed to prepare storage",
 		})
 		return
 	}
 
-	// Generate storage path
-	storagePath := filepath.Join(storageDir, file.Filename)
-	log.Printf("Storage path: %s", storagePath)
+	// Generate unique filename
+	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
+	storagePath := filepath.Join(storageDir, encryptedFileName)
 
-	// Begin transaction
-	tx := c.db.Begin()
-	log.Printf("Started database transaction")
-
-	// Create file record with authenticated user ID
+	// Create file record
 	fileRecord := &models.File{
-		UserID:       currentUser.ID, // Use authenticated user ID
-		Name:         file.Filename,
-		OriginalName: file.Filename,
-		FilePath:     storagePath,
-		Size:         file.Size,
-		MimeType:     file.Header.Get("Content-Type"),
+		UserID:         currentUser.ID,
+		Name:           encryptedFileName,
+		OriginalName:   fileHeader.Filename,
+		FilePath:       storagePath,
+		Size:           fileHeader.Size,
+		MimeType:       fileHeader.Header.Get("Content-Type"),
+		EncryptionIV:   iv,
+		EncryptionSalt: salt,
+		FileHash:       fileHash,
 	}
 
-	if err := tx.Create(fileRecord).Error; err != nil {
-		tx.Rollback()
-		log.Printf("Database error creating file record: %v", err)
+	// Save encrypted file
+	if err := os.WriteFile(storagePath, encrypted, 0600); err != nil {
+		log.Printf("Failed to save encrypted file: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  fmt.Sprintf("Database error: %v", err),
+			"error":  "Failed to save file",
 		})
 		return
 	}
 
-	// Save file
-	if err := ctx.SaveUploadedFile(file, storagePath); err != nil {
-		tx.Rollback()
-		log.Printf("Error saving file: %v", err)
+	// Create database records with key fragments
+	if err := c.fileModel.CreateFileWithFragments(fileRecord, shares, c.keyFragmentModel); err != nil {
+		os.Remove(storagePath)
+		log.Printf("Database error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  fmt.Sprintf("File save error: %v", err),
+			"error":  fmt.Sprintf("Failed to save file information: %v", err),
 		})
 		return
 	}
 
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		os.Remove(storagePath) // Clean up file if transaction fails
-		log.Printf("Transaction commit error: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  fmt.Sprintf("Transaction error: %v", err),
-		})
-		return
+	// Log activity
+	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
+		UserID:       currentUser.ID,
+		ActivityType: "upload",
+		FileID:       &fileRecord.ID,
+		IPAddress:    ctx.ClientIP(),
+		Status:       "success",
+	}); err != nil {
+		log.Printf("Failed to log activity: %v", err)
 	}
 
 	log.Printf("File upload successful: %s", fileRecord.Name)
