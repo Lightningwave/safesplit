@@ -64,8 +64,8 @@ CREATE TABLE files (
     is_archived BOOLEAN DEFAULT FALSE,            -- Whether file is archived
     is_deleted BOOLEAN DEFAULT FALSE,             -- Soft delete flag
     deleted_at TIMESTAMP NULL,                    -- When file was soft deleted
-    encryption_iv BINARY(16) NOT NULL,            -- AES initialization vector
-    encryption_salt BINARY(32) NOT NULL,          -- Salt for key derivation
+    encryption_iv BINARY(16),            -- AES initialization vector
+    encryption_salt BINARY(32),          -- Salt for key derivation
     file_hash VARCHAR(64) NOT NULL,               -- Hash for integrity verification
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

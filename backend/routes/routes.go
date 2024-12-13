@@ -21,8 +21,11 @@ type RouteHandlers struct {
 }
 
 type EndUserHandlers struct {
-	UploadFileController *EndUser.UploadFileController
-	ViewFilesController  *EndUser.ViewFilesController
+	UploadFileController   *EndUser.UploadFileController
+	ViewFilesController    *EndUser.ViewFilesController
+	DownloadFileController *EndUser.DownloadFileController
+	DeleteFileController   *EndUser.DeleteFileController
+	ArchiveFileController  *EndUser.ArchiveFileController
 }
 
 type SuperAdminHandlers struct {
@@ -65,8 +68,11 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController: EndUser.NewFileController(db, fileModel, activityLogModel),
-			ViewFilesController:  EndUser.NewViewFilesController(db, fileModel),
+			UploadFileController:   EndUser.NewFileController(db, fileModel, activityLogModel),
+			ViewFilesController:    EndUser.NewViewFilesController(db, fileModel),
+			DownloadFileController: EndUser.NewDownloadFileController(fileModel),
+			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
+			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
 		},
 	}
 }
@@ -110,7 +116,10 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	files := protected.Group("/files")
 	{
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
+		files.GET("/:id/download", handlers.DownloadFileController.Download)
 		files.POST("/upload", handlers.UploadFileController.Upload)
+		files.DELETE("/:id", handlers.DeleteFileController.Delete)
+		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
 	}
 }
 

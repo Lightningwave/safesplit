@@ -88,3 +88,112 @@ func (m *FileModel) ListUserFiles(userID uint) ([]File, error) {
 
 	return files, nil
 }
+func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
+	var file File
+	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
+		First(&file).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("file not found or access denied")
+		}
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+
+	return &file, nil
+}
+
+func (m *FileModel) LogDownloadActivity(tx *gorm.DB, fileID, userID uint, ipAddress string) error {
+	activity := ActivityLog{
+		UserID:       userID,
+		ActivityType: "download",
+		FileID:       &fileID,
+		IPAddress:    ipAddress,
+		Status:       "success",
+	}
+
+	if err := tx.Create(&activity).Error; err != nil {
+		return fmt.Errorf("failed to log download activity: %w", err)
+	}
+
+	return nil
+}
+func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
+	tx := m.db.Begin()
+
+	// Delete file
+	result := tx.Model(&File{}).
+		Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
+		Updates(map[string]interface{}{
+			"is_deleted": true,
+			"deleted_at": time.Now(),
+		})
+
+	if result.Error != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete file: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("file not found or already deleted")
+	}
+
+	// Log activity
+	activity := &ActivityLog{
+		UserID:       userID,
+		ActivityType: "delete",
+		FileID:       &fileID,
+		IPAddress:    ipAddress,
+		Status:       "success",
+	}
+
+	if err := tx.Create(activity).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to log activity: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to complete delete operation: %w", err)
+	}
+
+	return nil
+}
+func (m *FileModel) ArchiveFile(fileID, userID uint, ipAddress string) error {
+	tx := m.db.Begin()
+
+	// Archive the file
+	result := tx.Model(&File{}).
+		Where("id = ? AND user_id = ? AND is_archived = ?", fileID, userID, false).
+		Update("is_archived", true)
+
+	if result.Error != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to archive file: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("file not found or already archived")
+	}
+
+	// Log activity
+	activity := &ActivityLog{
+		UserID:       userID,
+		ActivityType: "archive",
+		FileID:       &fileID,
+		IPAddress:    ipAddress,
+		Status:       "success",
+	}
+
+	if err := tx.Create(activity).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to log activity: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to complete archive operation: %w", err)
+	}
+
+	return nil
+}

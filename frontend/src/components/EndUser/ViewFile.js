@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { File, MoreVertical, Loader } from 'lucide-react';
+import { File, Loader } from 'lucide-react';
+import FileActions from './FileActions';
 
 const ViewFile = ({ searchQuery, user }) => {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedFiles, setSelectedFiles] = useState(new Set());
-
-    useEffect(() => {
-        if (user) {
-            fetchFiles();
-        }
-    }, [user]);
 
     const fetchFiles = async () => {
         try {
@@ -47,14 +42,24 @@ const ViewFile = ({ searchQuery, user }) => {
         }
     };
 
-    const filteredFiles = searchQuery
-        ? files.filter(file => 
-            (file.original_name || file.name)
-                .toLowerCase()
-                .includes(searchQuery.toLowerCase())
-          )
-        : files;
+    useEffect(() => {
+        if (user) {
+            fetchFiles();
+        }
+    }, [user]);
 
+    const handleFileAction = async (action, file) => {
+        switch (action) {
+            case 'delete':
+            case 'archive':
+                await fetchFiles(); // Refresh the file list
+                break;
+            default:
+                break;
+        }
+    };
+
+    // Format utilities
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -72,6 +77,7 @@ const ViewFile = ({ searchQuery, user }) => {
         });
     };
 
+    // Selection handlers
     const handleFileSelection = (fileId) => {
         setSelectedFiles(prev => {
             const newSelected = new Set(prev);
@@ -91,6 +97,15 @@ const ViewFile = ({ searchQuery, user }) => {
             setSelectedFiles(new Set());
         }
     };
+
+    // Filter files based on search query
+    const filteredFiles = searchQuery
+        ? files.filter(file => 
+            (file.original_name || file.name)
+                .toLowerCase()
+                .includes(searchQuery.toLowerCase())
+          )
+        : files;
 
     if (!user) {
         return (
@@ -160,12 +175,11 @@ const ViewFile = ({ searchQuery, user }) => {
                                 <div className="col-span-2">{file.folder || 'My Files'}</div>
                                 <div className="col-span-2">{formatDate(file.created_at)}</div>
                                 <div className="col-span-1">
-                                    <button 
-                                        className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                        aria-label="More options"
-                                    >
-                                        <MoreVertical size={16} />
-                                    </button>
+                                    <FileActions 
+                                        file={file} 
+                                        onRefresh={fetchFiles}
+                                        onAction={handleFileAction}
+                                    />
                                 </div>
                             </div>
                         ))
