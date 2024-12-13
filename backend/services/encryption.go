@@ -4,40 +4,90 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 )
 
-type EncryptionService struct{}
-
-func NewEncryptionService() *EncryptionService {
-	return &EncryptionService{}
+type EncryptionService struct {
+	shamirService *ShamirService
 }
 
-func (s *EncryptionService) EncryptFile(data []byte) (encrypted []byte, iv []byte, salt []byte, err error) {
-	// Generate encryption parameters
-	key := make([]byte, 32)
-	iv = make([]byte, aes.BlockSize)
-	salt = make([]byte, 32)
+func NewEncryptionService(shamirService *ShamirService) *EncryptionService {
+	return &EncryptionService{
+		shamirService: shamirService,
+	}
+}
 
+func (s *EncryptionService) EncryptFile(data []byte, n, k int) (encrypted []byte, iv []byte, salt []byte, shares []KeyShare, err error) {
+	// Generate encryption key
+	key := make([]byte, 32) // 256-bit key
 	if _, err := rand.Read(key); err != nil {
-		return nil, nil, nil, err
-	}
-	if _, err := rand.Read(iv); err != nil {
-		return nil, nil, nil, err
-	}
-	if _, err := rand.Read(salt); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 
+	// Split key into shares using Shamir's Secret Sharing
+	shares, err = s.shamirService.SplitKey(key, n, k)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to split key: %w", err)
+	}
+
+	// Generate salt
+	salt = make([]byte, 32) // 256-bit salt
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	// Create cipher block
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	// Create GCM mode
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16) // Force 16-byte nonce size
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("failed to create GCM: %w", err)
 	}
 
+	// Generate IV of fixed size (16 bytes)
+	iv = make([]byte, 16)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to generate IV: %w", err)
+	}
+
+	// Encrypt the data
 	encrypted = gcm.Seal(nil, iv, data, nil)
-	return encrypted, iv, salt, nil
+	return encrypted, iv, salt, shares, nil
+}
+
+func (s *EncryptionService) DecryptFile(encrypted []byte, iv []byte, keyShares []KeyShare, k int) ([]byte, error) {
+	// Reconstruct key from shares
+	key, err := s.shamirService.RecombineKey(keyShares, k)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconstruct key: %w", err)
+	}
+
+	// Create cipher block
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16) // Force 16-byte nonce size
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Check that IV length matches 16 bytes
+	if len(iv) != 16 {
+		return nil, fmt.Errorf("invalid IV length: got %d, expected 16", len(iv))
+	}
+
+	// Decrypt the data
+	decrypted, err := gcm.Open(nil, iv, encrypted, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return decrypted, nil
 }

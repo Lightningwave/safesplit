@@ -7,6 +7,7 @@ import (
 	"safesplit/config"
 	"safesplit/models"
 	"safesplit/routes"
+	"safesplit/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,11 @@ func main() {
 	userModel := models.NewUserModel(db)
 	activityLogModel := models.NewActivityLogModel(db)
 	fileModel := models.NewFileModel(db)
+	keyFragmentModel := models.NewKeyFragmentModel(db)
+
+	// Initialize Shamir and Encryption services
+	shamirService := services.NewShamirService()
+	encryptionService := services.NewEncryptionService(shamirService)
 
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
@@ -30,6 +36,9 @@ func main() {
 		userModel,
 		activityLogModel,
 		fileModel,
+		keyFragmentModel,
+		encryptionService,
+		shamirService,
 	)
 
 	// Set up the Gin router with default middleware

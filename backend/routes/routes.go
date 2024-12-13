@@ -7,6 +7,7 @@ import (
 	"safesplit/controllers/SysAdmin"
 	"safesplit/middleware"
 	"safesplit/models"
+	"safesplit/services"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -49,6 +50,9 @@ func NewRouteHandlers(
 	userModel *models.UserModel,
 	activityLogModel *models.ActivityLogModel,
 	fileModel *models.FileModel,
+	keyFragmentModel *models.KeyFragmentModel,
+	encryptionService *services.EncryptionService,
+	shamirService *services.ShamirService,
 ) *RouteHandlers {
 	return &RouteHandlers{
 		LoginController:         controllers.NewLoginController(userModel),
@@ -68,9 +72,9 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:   EndUser.NewFileController(db, fileModel, activityLogModel),
+			UploadFileController:   EndUser.NewFileController(fileModel, activityLogModel, encryptionService, shamirService, keyFragmentModel),
 			ViewFilesController:    EndUser.NewViewFilesController(fileModel),
-			DownloadFileController: EndUser.NewDownloadFileController(fileModel),
+			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
 		},
