@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"safesplit/config"
 	"safesplit/models"
 	"safesplit/routes"
@@ -18,12 +19,18 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Initialize both user and activity log models
+	// Initialize all required models
 	userModel := models.NewUserModel(db)
 	activityLogModel := models.NewActivityLogModel(db)
+	fileModel := models.NewFileModel(db)
 
-	// Initialize route handlers with both models
-	handlers := routes.NewRouteHandlers(userModel, activityLogModel)
+	// Initialize route handlers with all required dependencies
+	handlers := routes.NewRouteHandlers(
+		db,
+		userModel,
+		activityLogModel,
+		fileModel,
+	)
 
 	// Set up the Gin router with default middleware
 	router := gin.Default()
@@ -42,6 +49,11 @@ func main() {
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 
 	router.Use(cors.New(corsConfig))
+
+	// Create storage directory if it doesn't exist
+	if err := createStorageDirectories(); err != nil {
+		log.Fatal("Failed to create storage directories:", err)
+	}
 
 	// Add debug endpoint for route verification
 	router.GET("/debug", func(c *gin.Context) {
@@ -70,4 +82,13 @@ func main() {
 	if err := router.Run(port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// createStorageDirectories ensures the required storage directories exist
+func createStorageDirectories() error {
+	storagePath := "storage/encrypted"
+	if err := os.MkdirAll(storagePath, 0700); err != nil {
+		return fmt.Errorf("failed to create storage directory: %w", err)
+	}
+	return nil
 }

@@ -2,12 +2,14 @@ package routes
 
 import (
 	"safesplit/controllers"
+	"safesplit/controllers/EndUser"
 	"safesplit/controllers/SuperAdmin"
 	"safesplit/controllers/SysAdmin"
 	"safesplit/middleware"
 	"safesplit/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type RouteHandlers struct {
@@ -15,6 +17,12 @@ type RouteHandlers struct {
 	CreateAccountController *controllers.CreateAccountController
 	SuperAdminHandlers      *SuperAdminHandlers
 	SysAdminHandlers        *SysAdminHandlers
+	EndUserHandlers         *EndUserHandlers
+}
+
+type EndUserHandlers struct {
+	UploadFileController *EndUser.UploadFileController
+	ViewFilesController  *EndUser.ViewFilesController
 }
 
 type SuperAdminHandlers struct {
@@ -33,7 +41,12 @@ type SysAdminHandlers struct {
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
 }
 
-func NewRouteHandlers(userModel *models.UserModel, activityLogModel *models.ActivityLogModel) *RouteHandlers {
+func NewRouteHandlers(
+	db *gorm.DB,
+	userModel *models.UserModel,
+	activityLogModel *models.ActivityLogModel,
+	fileModel *models.FileModel,
+) *RouteHandlers {
 	return &RouteHandlers{
 		LoginController:         controllers.NewLoginController(userModel),
 		CreateAccountController: controllers.NewCreateAccountController(userModel),
@@ -49,14 +62,16 @@ func NewRouteHandlers(userModel *models.UserModel, activityLogModel *models.Acti
 			ViewUserAccountController:        SysAdmin.NewViewUserAccountController(userModel),
 			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
-			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel)},
+			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
+		},
+		EndUserHandlers: &EndUserHandlers{
+			UploadFileController: EndUser.NewFileController(db, fileModel, activityLogModel),
+			ViewFilesController:  EndUser.NewViewFilesController(db, fileModel),
+		},
 	}
 }
-func SetupRoutes(
-	router *gin.Engine,
-	handlers *RouteHandlers,
-	userModel *models.UserModel,
-) {
+
+func SetupRoutes(router *gin.Engine, handlers *RouteHandlers, userModel *models.UserModel) {
 	api := router.Group("/api")
 	{
 		setupPublicRoutes(api, handlers)
@@ -78,6 +93,10 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	protected.GET("/me", handlers.LoginController.GetMe)
 
+	// End User routes should be first as they're most commonly accessed
+	setupEndUserRoutes(protected, handlers.EndUserHandlers)
+
+	// Admin routes with their respective middleware
 	superAdmin := protected.Group("/admin")
 	superAdmin.Use(middleware.SuperAdminMiddleware())
 	setupSuperAdminRoutes(superAdmin, handlers.SuperAdminHandlers)
@@ -85,6 +104,14 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	sysAdmin := protected.Group("/system")
 	sysAdmin.Use(middleware.SysAdminMiddleware())
 	setupSysAdminRoutes(sysAdmin, handlers.SysAdminHandlers)
+}
+
+func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
+	files := protected.Group("/files")
+	{
+		files.GET("", handlers.ViewFilesController.ListUserFiles)
+		files.POST("/upload", handlers.UploadFileController.Upload)
+	}
 }
 
 func setupSuperAdminRoutes(superAdmin *gin.RouterGroup, handlers *SuperAdminHandlers) {
@@ -102,11 +129,9 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 		userRoutes.PUT("/:id", handlers.UpdateAccountController.UpdateAccount)
 		userRoutes.DELETE("/:id", handlers.DeleteUserAccountController.DeleteUser)
 
-		// Deleted users management
 		userRoutes.GET("/deleted", handlers.ViewDeletedUserAccountController.GetDeletedUsers)
 		userRoutes.POST("/deleted/:id/restore", handlers.ViewDeletedUserAccountController.RestoreUser)
 	}
 
-	// System statistics
 	sysAdmin.GET("/storage/stats", handlers.ViewUserStorageController.GetStorageStats)
 }
