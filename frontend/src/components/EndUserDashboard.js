@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, ChevronDown, ChevronRight, Search, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronDown, ChevronRight, Search, Upload } from 'lucide-react';
 import UploadFile from './EndUser/UploadFile';
 import ViewFile from './EndUser/ViewFile';
+import Settings from './EndUser/Settings';
 
 const EndUserDashboard = ({ user, onLogout }) => {
     const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -20,7 +21,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="flex h-screen bg-white">
-            <div className="w-64 bg-gray-700 text-white">
+            <div className="w-64 bg-gray-700 text-white relative">
                 <div className="p-1 border-b border-gray-600 flex justify-center items-center">
                     <img src="/safesplit-logo_white.png" alt="SafeSplit Logo" className="h-32 w-auto" />
                 </div>
@@ -28,9 +29,14 @@ const EndUserDashboard = ({ user, onLogout }) => {
                 <nav className="p-4">
                     <ul className="space-y-2">
                         <li>
-                            <a href="#" className="block px-4 py-2 rounded hover:bg-gray-600 transition-colors">
+                            <button
+                                onClick={() => setSelectedSection('Dashboard')}
+                                className={`block w-full text-left px-4 py-2 rounded ${
+                                    selectedSection === 'Dashboard' ? 'bg-gray-600' : 'hover:bg-gray-600'
+                                } transition-colors`}
+                            >
                                 Dashboard
-                            </a>
+                            </button>
                         </li>
                         
                         <li>
@@ -61,9 +67,14 @@ const EndUserDashboard = ({ user, onLogout }) => {
                         </li>
                         
                         <li>
-                            <a href="#" className="block px-4 py-2 rounded hover:bg-gray-600 transition-colors">
-                                Settings
-                            </a>
+                            <button 
+                                onClick={() => setSelectedSection('Settings')}
+                                className={`block w-full text-left px-4 py-2 rounded ${
+                                    selectedSection === 'Settings' ? 'bg-gray-600' : 'hover:bg-gray-600'
+                                } transition-colors flex items-center`}
+                            >
+                                 Settings
+                            </button>
                         </li>
                     </ul>
                 </nav>
@@ -87,33 +98,39 @@ const EndUserDashboard = ({ user, onLogout }) => {
                 <div className="p-8">
                     <div className="flex justify-between items-center mb-8">
                         <h1 className="text-2xl font-semibold">{selectedSection}</h1>
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
-                                <Search size={20} className="text-gray-400 mr-2" />
-                                <input
-                                    type="text"
-                                    placeholder="Search files..."
-                                    value={searchQuery}
-                                    onChange={handleSearch}
-                                    className="bg-transparent outline-none w-64"
-                                />
+                        {selectedSection !== 'Settings' && (
+                            <div className="flex items-center space-x-4">
+                                <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
+                                    <Search size={20} className="text-gray-400 mr-2" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search files..."
+                                        value={searchQuery}
+                                        onChange={handleSearch}
+                                        className="bg-transparent outline-none w-64"
+                                    />
+                                </div>
+                                
+                                <button 
+                                    onClick={() => setIsUploadModalOpen(true)}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                                    aria-label="Upload file"
+                                >
+                                    <Upload size={20} />
+                                    <span>Upload File</span>
+                                </button>
                             </div>
-                            
-                            <button 
-                                onClick={() => setIsUploadModalOpen(true)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                                aria-label="Upload file"
-                            >
-                                <Upload size={20} />
-                                <span>Upload File</span>
-                            </button>
-                        </div>
+                        )}
                     </div>
 
-                    <ViewFile 
-                        searchQuery={searchQuery}
-                        user={user}
-                    />
+                    {selectedSection === 'Settings' ? (
+                        <Settings user={user} />
+                    ) : (
+                        <ViewFile 
+                            searchQuery={searchQuery}
+                            user={user}
+                        />
+                    )}
                 </div>
             </div>
 
