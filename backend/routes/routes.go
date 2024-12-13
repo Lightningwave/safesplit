@@ -69,7 +69,7 @@ func NewRouteHandlers(
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:   EndUser.NewFileController(db, fileModel, activityLogModel),
-			ViewFilesController:    EndUser.NewViewFilesController(db, fileModel),
+			ViewFilesController:    EndUser.NewViewFilesController(fileModel),
 			DownloadFileController: EndUser.NewDownloadFileController(fileModel),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
