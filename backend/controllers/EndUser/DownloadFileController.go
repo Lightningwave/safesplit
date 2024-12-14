@@ -39,6 +39,7 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 	// Get authenticated user
 	user, exists := ctx.Get("user")
 	if !exists {
+		log.Printf("User authentication failed - user not found in context")
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
 			"error":  "Unauthorized access",
@@ -48,6 +49,7 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 
 	currentUser, ok := user.(*models.User)
 	if !ok {
+		log.Printf("User authentication failed - invalid user type in context")
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Invalid user data",
@@ -66,6 +68,7 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 	}
 
 	// Fetch the file record
+	log.Printf("Attempting to fetch file ID: %d for user ID: %d", fileID, currentUser.ID)
 	file, err := c.fileModel.GetFileForDownload(uint(fileID), currentUser.ID)
 	if err != nil {
 		log.Printf("Error fetching file: %v", err)
@@ -80,9 +83,19 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 		return
 	}
 
-	// Check if file exists
+	// Validate threshold value
+	if file.Threshold < 2 {
+		log.Printf("Invalid threshold value in file record: %d", file.Threshold)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Invalid file configuration",
+		})
+		return
+	}
+
+	// Check if file exists on disk
 	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-		log.Printf("File not found on server: %v", err)
+		log.Printf("Physical file not found at path: %s", file.FilePath)
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"status": "error",
 			"error":  "File not found on server",
@@ -112,6 +125,16 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 		return
 	}
 
+	// Validate number of fragments against share count
+	if uint(len(fragments)) < file.ShareCount {
+		log.Printf("Insufficient key fragments: found %d, expected %d", len(fragments), file.ShareCount)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "File key fragments are incomplete",
+		})
+		return
+	}
+
 	// Convert fragments to KeyShares
 	shares := make([]services.KeyShare, len(fragments))
 	for i, fragment := range fragments {
@@ -123,8 +146,8 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 			i, fragment.FragmentIndex, len(fragment.EncryptedFragment))
 	}
 
-	// Decrypt file - using k=2 to match upload configuration
-	decryptedData, err := c.encryptionService.DecryptFile(encryptedData, file.EncryptionIV, shares, 2)
+	// Decrypt file using the file's threshold value
+	decryptedData, err := c.encryptionService.DecryptFile(encryptedData, file.EncryptionIV, shares, int(file.Threshold))
 	if err != nil {
 		log.Printf("Decryption failed: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -152,6 +175,6 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 	ctx.Header("Content-Type", file.MimeType)
 	ctx.Header("Content-Length", fmt.Sprintf("%d", len(decryptedData)))
 
-	log.Printf("File download successful: %s", file.Name)
+	log.Printf("File download successful: %s with threshold %d", file.Name, file.Threshold)
 	ctx.Data(http.StatusOK, file.MimeType, decryptedData)
 }

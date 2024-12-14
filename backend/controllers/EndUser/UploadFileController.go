@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"safesplit/models"
 	"safesplit/services"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +40,19 @@ func NewFileController(
 	}
 }
 
+func (c *UploadFileController) validateShamirParameters(n, k int) error {
+	if n < k {
+		return fmt.Errorf("number of shares (n) must be greater than or equal to threshold (k)")
+	}
+	if k < 2 {
+		return fmt.Errorf("threshold (k) must be at least 2")
+	}
+	if n > 10 {
+		return fmt.Errorf("number of shares (n) cannot exceed 10")
+	}
+	return nil
+}
+
 func (c *UploadFileController) Upload(ctx *gin.Context) {
 	log.Printf("Starting file upload request")
 
@@ -57,6 +71,36 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Invalid user data",
+		})
+		return
+	}
+
+	// Parse and validate Shamir parameters
+	nShares := ctx.PostForm("shares")
+	threshold := ctx.PostForm("threshold")
+
+	n, err := strconv.Atoi(nShares)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "Invalid number of shares provided",
+		})
+		return
+	}
+
+	k, err := strconv.Atoi(threshold)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "Invalid threshold provided",
+		})
+		return
+	}
+
+	if err := c.validateShamirParameters(n, k); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
 		})
 		return
 	}
@@ -96,11 +140,7 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 	hash := sha256.Sum256(content)
 	fileHash := base64.StdEncoding.EncodeToString(hash[:])
 
-	// Define n and k for Shamir's Secret Sharing
-	n := 2
-	k := 2
-
-	// Encrypt file
+	// Encrypt file with user-provided parameters
 	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(content, n, k)
 	if err != nil {
 		log.Printf("Encryption failed: %v", err)
@@ -126,7 +166,7 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
 	storagePath := filepath.Join(storageDir, encryptedFileName)
 
-	// Create file record
+	// Create file record with Shamir parameters
 	fileRecord := &models.File{
 		UserID:         currentUser.ID,
 		Name:           encryptedFileName,
@@ -137,6 +177,8 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		EncryptionIV:   iv,
 		EncryptionSalt: salt,
 		FileHash:       fileHash,
+		ShareCount:     uint(n), // Add this field to your File model
+		Threshold:      uint(k), // Add this field to your File model
 	}
 
 	// Save encrypted file
@@ -171,7 +213,7 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		log.Printf("Failed to log activity: %v", err)
 	}
 
-	log.Printf("File upload successful: %s", fileRecord.Name)
+	log.Printf("File upload successful: %s with %d shares and threshold of %d", fileRecord.Name, n, k)
 	ctx.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "File uploaded successfully",

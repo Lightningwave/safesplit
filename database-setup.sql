@@ -66,6 +66,8 @@ CREATE TABLE files (
     deleted_at TIMESTAMP NULL,                    -- When file was soft deleted
     encryption_iv BINARY(16),            -- AES initialization vector
     encryption_salt BINARY(32),          -- Salt for key derivation
+    share_count INTEGER NOT NULL DEFAULT 2,
+    threshold INTEGER NOT NULL DEFAULT 2;
     file_hash VARCHAR(64) NOT NULL,               -- Hash for integrity verification
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

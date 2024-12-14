@@ -2,9 +2,9 @@ package models
 
 import (
 	"fmt"
-	"time"
-
+	"log"
 	"safesplit/services"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -24,6 +24,8 @@ type File struct {
 	EncryptionIV   []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
 	EncryptionSalt []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
 	FileHash       string     `json:"file_hash"`
+	ShareCount     uint       `json:"share_count" gorm:"not null;default:2"`
+	Threshold      uint       `json:"threshold" gorm:"not null;default:2"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -97,11 +99,18 @@ func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
+			// Add detailed logging here
+			var existingFile File
+			m.db.Where("id = ?", fileID).First(&existingFile)
+			log.Printf("File lookup details - ID: %d, Owner: %d, IsDeleted: %v, RequestingUser: %d",
+				existingFile.ID, existingFile.UserID, existingFile.IsDeleted, userID)
 			return nil, fmt.Errorf("file not found or access denied")
 		}
 		return nil, fmt.Errorf("database error: %w", err)
 	}
 
+	// Add successful file lookup logging
+	log.Printf("File found - ID: %d, Path: %s, Owner: %d", file.ID, file.FilePath, file.UserID)
 	return &file, nil
 }
 
