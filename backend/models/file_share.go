@@ -1,0 +1,115 @@
+package models
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
+
+type FileShare struct {
+	ID                   uint       `json:"id" gorm:"primaryKey"`
+	FileID               uint       `json:"file_id"`
+	SharedBy             uint       `json:"shared_by"`
+	ShareLink            string     `json:"share_link" gorm:"unique"`
+	PasswordHash         string     `json:"-"`
+	PasswordSalt         string     `json:"-"`
+	EncryptedKeyFragment []byte     `json:"-" gorm:"type:mediumblob"`
+	ExpiresAt            *time.Time `json:"expires_at"`
+	MaxDownloads         *int       `json:"max_downloads"`
+	DownloadCount        int        `json:"download_count" gorm:"default:0"`
+	IsActive             bool       `json:"is_active" gorm:"default:true"`
+	CreatedAt            time.Time  `json:"created_at"`
+	File                 File       `json:"file" gorm:"foreignKey:FileID"`
+}
+
+type FileShareModel struct {
+	db *gorm.DB
+}
+
+func NewFileShareModel(db *gorm.DB) *FileShareModel {
+	return &FileShareModel{db: db}
+}
+
+func generateShareLink() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func (m *FileShareModel) CreateFileShare(share *FileShare, password string) error {
+	// Generate password salt
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return fmt.Errorf("failed to generate salt: %w", err)
+	}
+	share.PasswordSalt = base64.StdEncoding.EncodeToString(salt)
+
+	// Hash password with salt
+	hashedPassword, err := bcrypt.GenerateFromPassword(
+		[]byte(password+share.PasswordSalt),
+		bcrypt.DefaultCost,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	share.PasswordHash = string(hashedPassword)
+
+	// Generate unique share link
+	shareLink, err := generateShareLink()
+	if err != nil {
+		return fmt.Errorf("failed to generate share link: %w", err)
+	}
+	share.ShareLink = shareLink
+
+	// Create share record
+	if err := m.db.Create(share).Error; err != nil {
+		return fmt.Errorf("failed to create share record: %w", err)
+	}
+
+	return nil
+}
+
+func (m *FileShareModel) ValidateShareAccess(shareLink string, password string) (*FileShare, error) {
+	var share FileShare
+	if err := m.db.Where("share_link = ? AND is_active = ?", shareLink, true).
+		Preload("File").First(&share).Error; err != nil {
+		return nil, fmt.Errorf("share not found or inactive")
+	}
+
+	// Check expiration
+	if share.ExpiresAt != nil && share.ExpiresAt.Before(time.Now()) {
+		share.IsActive = false
+		m.db.Save(&share)
+		return nil, fmt.Errorf("share has expired")
+	}
+
+	// Check download limit
+	if share.MaxDownloads != nil && share.DownloadCount >= *share.MaxDownloads {
+		share.IsActive = false
+		m.db.Save(&share)
+		return nil, fmt.Errorf("download limit exceeded")
+	}
+
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(share.PasswordHash),
+		[]byte(password+share.PasswordSalt),
+	); err != nil {
+		return nil, fmt.Errorf("invalid password")
+	}
+
+	return &share, nil
+}
+
+func (m *FileShareModel) IncrementDownloadCount(shareID uint) error {
+	return m.db.Model(&FileShare{}).
+		Where("id = ?", shareID).
+		UpdateColumn("download_count", gorm.Expr("download_count + ?", 1)).
+		Error
+}

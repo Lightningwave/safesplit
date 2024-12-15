@@ -24,6 +24,7 @@ func main() {
 	userModel := models.NewUserModel(db)
 	activityLogModel := models.NewActivityLogModel(db)
 	fileModel := models.NewFileModel(db)
+	fileShareModel := models.NewFileShareModel(db)
 	keyFragmentModel := models.NewKeyFragmentModel(db)
 
 	// Initialize Shamir and Encryption services
@@ -36,6 +37,7 @@ func main() {
 		userModel,
 		activityLogModel,
 		fileModel,
+		fileShareModel,
 		keyFragmentModel,
 		encryptionService,
 		shamirService,

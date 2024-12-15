@@ -27,6 +27,7 @@ type EndUserHandlers struct {
 	DownloadFileController *EndUser.DownloadFileController
 	DeleteFileController   *EndUser.DeleteFileController
 	ArchiveFileController  *EndUser.ArchiveFileController
+	ShareFileController    *EndUser.ShareFileController
 }
 
 type SuperAdminHandlers struct {
@@ -50,6 +51,7 @@ func NewRouteHandlers(
 	userModel *models.UserModel,
 	activityLogModel *models.ActivityLogModel,
 	fileModel *models.FileModel,
+	fileShareModel *models.FileShareModel,
 	keyFragmentModel *models.KeyFragmentModel,
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
@@ -77,6 +79,7 @@ func NewRouteHandlers(
 			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
+			ShareFileController:    EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
 		},
 	}
 }
@@ -95,6 +98,7 @@ func SetupRoutes(router *gin.Engine, handlers *RouteHandlers, userModel *models.
 func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 	api.POST("/login", handlers.LoginController.Login)
 	api.POST("/register", handlers.CreateAccountController.CreateAccount)
+	api.POST("/files/share/:shareLink", handlers.EndUserHandlers.ShareFileController.AccessShare)
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
@@ -124,6 +128,8 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.POST("/upload", handlers.UploadFileController.Upload)
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
+		files.POST("/:id/share", handlers.ShareFileController.CreateShare)
+		files.GET("/share/:shareLink", handlers.ShareFileController.AccessShare)
 	}
 }
 

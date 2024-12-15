@@ -11,6 +11,8 @@ import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { logout, getCurrentUser, getDashboardByRole } from './services/authService';
+import SharedFileAccess from './components/EndUser/SharedFileAccess';
+
 
 function App() {
   const [user, setUser] = useState(() => getCurrentUser());
@@ -31,6 +33,8 @@ function App() {
           <Route path="/about" element={<AboutPage />} /> {/* Added About route */}
           <Route path="/login" element={user ? <Navigate to={getDashboardByRole(user.role)} /> : <LoginForm onLogin={setUser} />} />
           <Route path="/register" element={user ? <Navigate to={getDashboardByRole(user.role)} /> : <RegisterForm />} />
+          <Route path="/share/:shareLink" element={<SharedFileAccess />} />
+
 
           {/* Protected Routes */}
           <Route 

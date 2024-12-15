@@ -4,7 +4,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 type EncryptionService struct {
@@ -87,6 +90,81 @@ func (s *EncryptionService) DecryptFile(encrypted []byte, iv []byte, keyShares [
 	decrypted, err := gcm.Open(nil, iv, encrypted, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return decrypted, nil
+}
+
+// EncryptKeyFragment now works with []byte
+func (s *EncryptionService) EncryptKeyFragment(fragment []byte, password []byte) ([]byte, error) {
+	// Generate a random salt for PBKDF2
+	salt := make([]byte, 32)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	// Derive key using PBKDF2
+	key := pbkdf2.Key(password, salt, 4096, 32, sha256.New)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Generate nonce
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	// Encrypt the fragment
+	ciphertext := gcm.Seal(nil, nonce, fragment, nil)
+
+	// Combine salt + nonce + ciphertext
+	result := make([]byte, len(salt)+len(nonce)+len(ciphertext))
+	copy(result[0:32], salt)
+	copy(result[32:48], nonce)
+	copy(result[48:], ciphertext)
+
+	return result, nil
+}
+
+// DecryptKeyFragment now works with []byte
+func (s *EncryptionService) DecryptKeyFragment(encryptedFragment []byte, password []byte) ([]byte, error) {
+	// Check minimum length (32 bytes salt + 16 bytes nonce + at least 1 byte data)
+	if len(encryptedFragment) < 49 {
+		return nil, fmt.Errorf("encrypted fragment too short")
+	}
+
+	// Extract salt and nonce
+	salt := encryptedFragment[0:32]
+	nonce := encryptedFragment[32:48]
+	ciphertext := encryptedFragment[48:]
+
+	// Derive key using PBKDF2 with the same parameters
+	key := pbkdf2.Key(password, salt, 4096, 32, sha256.New)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Decrypt the fragment
+	decrypted, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt fragment: %w", err)
 	}
 
 	return decrypted, nil

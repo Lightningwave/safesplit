@@ -82,7 +82,7 @@ CREATE TABLE key_fragments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     file_id INT NOT NULL,                         -- Associated file
     fragment_index INT NOT NULL,                  -- Position in the key reconstruction sequence
-    encrypted_fragment TEXT NOT NULL,             -- The encrypted key fragment
+    encrypted_fragment MEDIUMBLOB NOT NULL,       -- The encrypted key fragment
     holder_type VARCHAR(50) NOT NULL,             -- Who holds this fragment
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
@@ -100,7 +100,7 @@ CREATE TABLE file_shares (
     share_link VARCHAR(255) UNIQUE NOT NULL,      -- Unique share link
     password_hash VARCHAR(255) NOT NULL,          -- Hash of share password
     password_salt VARCHAR(32) NOT NULL,           -- Salt for password hashing
-    encrypted_key_fragment TEXT NOT NULL,         -- Fragment encrypted with share password
+    encrypted_key_fragment MEDIUMBLOB NOT NULL,   -- Fragment encrypted with share password
     expires_at TIMESTAMP NULL,                    -- Optional expiration date
     max_downloads INT NULL,                       -- Optional download limit
     download_count INT DEFAULT 0,                 -- Current download count

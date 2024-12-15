@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"log"
+	"os"
 	"safesplit/services"
 	"time"
 
@@ -234,4 +235,30 @@ func (m *FileModel) CreateFileWithFragments(file *File, shares []services.KeySha
 	}
 
 	return nil
+}
+func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
+	var file File
+	err := m.db.Where("id = ? AND is_deleted = ?", fileID, false).First(&file).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("file not found")
+		}
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	return &file, nil
+}
+
+func (m *FileModel) ReadFileContent(filePath string) ([]byte, error) {
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("file not found on server: %w", err)
+	}
+
+	// Read file content
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return data, nil
 }

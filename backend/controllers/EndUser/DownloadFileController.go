@@ -140,7 +140,7 @@ func (c *DownloadFileController) Download(ctx *gin.Context) {
 	for i, fragment := range fragments {
 		shares[i] = services.KeyShare{
 			Index: fragment.FragmentIndex,
-			Value: fragment.EncryptedFragment,
+			Value: string(fragment.EncryptedFragment),
 		}
 		log.Printf("Processing share %d - Index: %d, Value length: %d",
 			i, fragment.FragmentIndex, len(fragment.EncryptedFragment))
