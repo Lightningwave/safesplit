@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, MoreVertical, Loader2 } from 'lucide-react';
 import PropTypes from 'prop-types';
-import ConfirmationAction from './ConfirmationAction';
 import ViewUserAction from './ViewUserAction';
 import UpdateUserAction from './UpdateUserAction';
+import DeleteUserAction from './DeleteUserAction';
 
 const ViewUserAccounts = ({ selectedType }) => {
   const [users, setUsers] = useState([]);
@@ -23,17 +23,27 @@ const ViewUserAccounts = ({ selectedType }) => {
 
   const fetchUsers = async () => {
     try {
+      setLoading(true);
       const response = await fetch('http://localhost:8080/api/system/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
 
-      if (!response.ok) throw new Error('Failed to fetch users');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
+      
       const data = await response.json();
+      if (!Array.isArray(data.users)) {
+        throw new Error('Invalid data format received from server');
+      }
+      
       setUsers(data.users);
     } catch (err) {
       setError(err.message);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -42,6 +52,13 @@ const ViewUserAccounts = ({ selectedType }) => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleSelectAll = (event) => {
     if (event.target.checked) {
@@ -74,6 +91,13 @@ const ViewUserAccounts = ({ selectedType }) => {
     setIsDeleteModalOpen(true);
   };
 
+  const handleDeleteSuccess = (deletedUserId) => {
+    setUsers(prevUsers => prevUsers.filter(user => user.id !== deletedUserId));
+    setSelectedUsers(prevSelected => 
+      prevSelected.filter(id => id !== deletedUserId)
+    );
+  };
+
   const handleViewClick = (user) => {
     setUserToView(user.id);
     setIsViewModalOpen(true);
@@ -91,31 +115,9 @@ const ViewUserAccounts = ({ selectedType }) => {
         user.id === updatedUser.id ? { ...user, ...updatedUser } : user
       )
     );
-  };
-
-  const confirmDelete = async () => {
-    if (!userToDelete) return;
-
-    try {
-      const response = await fetch(`http://localhost:8080/api/system/users/${userToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
-
-      fetchUsers();
-      setIsDeleteModalOpen(false);
-      setUserToDelete(null);
-    } catch (err) {
-      setError(err.message);
-      setIsDeleteModalOpen(false);
-      setUserToDelete(null);
-    }
+    setIsUpdateModalOpen(false);
+    setUserToUpdate(null);
+    setCurrentUserToUpdate(null);
   };
 
   const ActionMenu = ({ user }) => (
@@ -130,7 +132,10 @@ const ViewUserAccounts = ({ selectedType }) => {
       </button>
       
       {activeMenu === user.id && (
-        <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 border">
+        <div 
+          className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 border"
+          onBlur={() => setActiveMenu(null)}
+        >
           <div className="py-1">
             <button 
               onClick={() => {
@@ -178,18 +183,16 @@ const ViewUserAccounts = ({ selectedType }) => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center p-8 text-red-500">
-        <AlertCircle className="mr-2" />
-        <span>{error}</span>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="space-y-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md flex items-center">
+            <AlertCircle className="mr-2" size={16} />
+            {error}
+          </div>
+        )}
+
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Users</h2>
@@ -203,6 +206,7 @@ const ViewUserAccounts = ({ selectedType }) => {
                     <input
                       type="checkbox"
                       onChange={handleSelectAll}
+                      checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
                       className="rounded border-gray-300"
                       aria-label="Select all users"
                     />
@@ -253,14 +257,14 @@ const ViewUserAccounts = ({ selectedType }) => {
         </div>
       </div>
 
-      <ConfirmationAction 
+      <DeleteUserAction 
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false);
           setUserToDelete(null);
         }}
-        onConfirm={confirmDelete}
-        message={`Are you sure you want to delete user ${userToDelete?.username}?`}
+        onDeleteSuccess={handleDeleteSuccess}
+        userToDelete={userToDelete}
       />
 
       <ViewUserAction 

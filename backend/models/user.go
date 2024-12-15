@@ -325,7 +325,9 @@ func (m *UserModel) GetAllUsers(sysAdmin *User) ([]*User, error) {
 	}
 
 	var users []*User
-	err := m.db.Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).Find(&users).Error
+	err := m.db.Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).
+		Where("is_active = ?", true).
+		Find(&users).Error
 	if err != nil {
 		return nil, fmt.Errorf("error fetching users: %v", err)
 	}
