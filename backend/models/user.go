@@ -111,6 +111,31 @@ func (m *UserModel) Authenticate(email, password string) (*User, error) {
 	if err := m.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error; err != nil {
 		return nil, errors.New("invalid credentials")
 	}
+
+	// Prevent super admin login through regular endpoint
+	if user.Role == RoleSuperAdmin {
+		return nil, errors.New("please use super admin login portal")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return nil, errors.New("invalid credentials")
+	}
+
+	// Update last login time
+	now := time.Now()
+	user.LastLogin = &now
+	if err := m.db.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error) {
+	var user User
+	if err := m.db.Where("email = ? AND is_active = ? AND role = ?", email, true, RoleSuperAdmin).First(&user).Error; err != nil {
+		return nil, errors.New("invalid credentials")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return nil, errors.New("invalid credentials")
 	}

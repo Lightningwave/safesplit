@@ -1,5 +1,35 @@
 const API_BASE_URL = 'http://localhost:8080/api';
 
+export const loginSuperAdmin = async (email, password) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/super-login`, { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Authentication failed');
+        }
+
+        if (data.user.role !== 'super_admin') {
+            throw new Error('Invalid super admin credentials');
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        return data;
+    } catch (error) {
+        console.error('Super admin login error:', error);
+        throw error;
+    }
+};
+
 export const login = async (email, password) => {
     try {
         const response = await fetch(`${API_BASE_URL}/login`, {
@@ -16,7 +46,11 @@ export const login = async (email, password) => {
             throw new Error(data.error || 'Login failed');
         }
 
-        // Store auth data
+        // Prevent super admin login through regular login
+        if (data.user.role === 'super_admin') {
+            throw new Error('Please use super admin login page');
+        }
+
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         

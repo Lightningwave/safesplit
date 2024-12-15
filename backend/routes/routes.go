@@ -14,11 +14,12 @@ import (
 )
 
 type RouteHandlers struct {
-	LoginController         *controllers.LoginController
-	CreateAccountController *controllers.CreateAccountController
-	SuperAdminHandlers      *SuperAdminHandlers
-	SysAdminHandlers        *SysAdminHandlers
-	EndUserHandlers         *EndUserHandlers
+	LoginController           *controllers.LoginController
+	SuperAdminLoginController *SuperAdmin.LoginController
+	CreateAccountController   *controllers.CreateAccountController
+	SuperAdminHandlers        *SuperAdminHandlers
+	SysAdminHandlers          *SysAdminHandlers
+	EndUserHandlers           *EndUserHandlers
 }
 
 type EndUserHandlers struct {
@@ -31,6 +32,7 @@ type EndUserHandlers struct {
 }
 
 type SuperAdminHandlers struct {
+	LoginController          *SuperAdmin.LoginController
 	CreateSysAdminController *SuperAdmin.CreateSysAdminController
 	ViewSysAdminController   *SuperAdmin.ViewSysAdminController
 	DeleteSysAdminController *SuperAdmin.DeleteSysAdminController
@@ -56,10 +58,13 @@ func NewRouteHandlers(
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
 ) *RouteHandlers {
+	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
-		LoginController:         controllers.NewLoginController(userModel),
-		CreateAccountController: controllers.NewCreateAccountController(userModel),
+		LoginController:           controllers.NewLoginController(userModel),
+		SuperAdminLoginController: superAdminLoginController,
+		CreateAccountController:   controllers.NewCreateAccountController(userModel),
 		SuperAdminHandlers: &SuperAdminHandlers{
+			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
 			ViewSysAdminController:   SuperAdmin.NewViewSysAdminController(userModel),
 			DeleteSysAdminController: SuperAdmin.NewDeleteSysAdminController(userModel),
@@ -97,6 +102,7 @@ func SetupRoutes(router *gin.Engine, handlers *RouteHandlers, userModel *models.
 
 func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 	api.POST("/login", handlers.LoginController.Login)
+	api.POST("/super-login", handlers.SuperAdminLoginController.Login)
 	api.POST("/register", handlers.CreateAccountController.CreateAccount)
 	api.POST("/files/share/:shareLink", handlers.EndUserHandlers.ShareFileController.AccessShare)
 	api.GET("/health", func(c *gin.Context) {
@@ -134,6 +140,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 }
 
 func setupSuperAdminRoutes(superAdmin *gin.RouterGroup, handlers *SuperAdminHandlers) {
+	superAdmin.GET("/me", handlers.LoginController.GetMe)
 	superAdmin.POST("/create-sysadmin", handlers.CreateSysAdminController.CreateSysAdmin)
 	superAdmin.GET("/sysadmins", handlers.ViewSysAdminController.ListSysAdmins)
 	superAdmin.DELETE("/sysadmins/:id", handlers.DeleteSysAdminController.DeleteSysAdmin)
