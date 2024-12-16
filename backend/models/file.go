@@ -239,6 +239,7 @@ func (m *FileModel) CreateFileWithFragments(file *File, shares []services.KeySha
 
 	return nil
 }
+
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 	var file File
 	err := m.db.Where("id = ? AND is_deleted = ?", fileID, false).First(&file).Error
