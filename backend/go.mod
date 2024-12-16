@@ -1,6 +1,8 @@
 module safesplit
 
-go 1.22.2
+go 1.22.5
+
+toolchain go1.22.10
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -24,6 +26,7 @@ require (
 	github.com/go-playground/validator/v10 v10.23.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
+	github.com/hashicorp/vault v1.18.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
