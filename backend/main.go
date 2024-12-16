@@ -27,9 +27,16 @@ func main() {
 	fileShareModel := models.NewFileShareModel(db)
 	keyFragmentModel := models.NewKeyFragmentModel(db)
 
-	// Initialize Shamir and Encryption services
+	// Initialize services
 	shamirService := services.NewShamirService()
 	encryptionService := services.NewEncryptionService(shamirService)
+
+	// Initialize compression service
+	compressionService, err := services.NewCompressionService()
+	if err != nil {
+		log.Fatal("Failed to initialize compression service:", err)
+	}
+	defer compressionService.Close()
 
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
@@ -41,6 +48,7 @@ func main() {
 		keyFragmentModel,
 		encryptionService,
 		shamirService,
+		compressionService,
 	)
 
 	// Set up the Gin router with default middleware
@@ -61,7 +69,7 @@ func main() {
 
 	router.Use(cors.New(corsConfig))
 
-	// Create storage directory if it doesn't exist
+	// Create storage directories
 	if err := createStorageDirectories(); err != nil {
 		log.Fatal("Failed to create storage directories:", err)
 	}
@@ -97,9 +105,17 @@ func main() {
 
 // createStorageDirectories ensures the required storage directories exist
 func createStorageDirectories() error {
-	storagePath := "storage/encrypted"
-	if err := os.MkdirAll(storagePath, 0700); err != nil {
-		return fmt.Errorf("failed to create storage directory: %w", err)
+	// Create main storage directories
+	paths := []string{
+		"storage/encrypted",
+		"storage/files", // Add this for file uploads
 	}
+
+	for _, path := range paths {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			return fmt.Errorf("failed to create storage directory %s: %w", path, err)
+		}
+	}
+
 	return nil
 }

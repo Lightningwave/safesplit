@@ -60,20 +60,24 @@ CREATE TABLE files (
     original_name VARCHAR(255) NOT NULL,          -- Original file name before encryption
     file_path VARCHAR(1024) NOT NULL,             -- Path to encrypted file on storage
     size BIGINT NOT NULL,                         -- File size in bytes
+    compressed_size BIGINT,                       -- Size after compression
+    is_compressed BOOLEAN DEFAULT FALSE,          -- Whether the file is compressed
+    compression_ratio DOUBLE PRECISION,           -- Compression ratio (original/compressed)
     mime_type VARCHAR(127),                       -- File type for download handling
     is_archived BOOLEAN DEFAULT FALSE,            -- Whether file is archived
     is_deleted BOOLEAN DEFAULT FALSE,             -- Soft delete flag
     deleted_at TIMESTAMP NULL,                    -- When file was soft deleted
-    encryption_iv BINARY(16),            -- AES initialization vector
-    encryption_salt BINARY(32),          -- Salt for key derivation
-    share_count INTEGER NOT NULL DEFAULT 2,
-    threshold INTEGER NOT NULL DEFAULT 2;
+    encryption_iv BINARY(16),                     -- AES initialization vector
+    encryption_salt BINARY(32),                   -- Salt for key derivation
+    share_count INTEGER NOT NULL DEFAULT 2,       -- Number of shares for Shamir's scheme
+    threshold INTEGER NOT NULL DEFAULT 2,         -- Threshold for Shamir's scheme
     file_hash VARCHAR(64) NOT NULL,               -- Hash for integrity verification
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
 );
+
 
 -- Key fragments table
 -- Purpose: Implements Shamir's Secret Sharing for encryption keys
@@ -128,19 +132,21 @@ CREATE TABLE share_access_logs (
 -- Note: Comprehensive logging for security and troubleshooting
 CREATE TABLE activity_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,                         -- User performing action
+    user_id INT NOT NULL,                         -- User performing the action
     activity_type ENUM('upload', 'download', 'delete', 'share', 'login', 
-                      'logout', 'archive', 'restore', 'encrypt', 'decrypt') NOT NULL,
+                       'logout', 'archive', 'restore', 'encrypt', 'decrypt') NOT NULL,
     file_id INT,                                  -- Associated file if any
     folder_id INT,                                -- Associated folder if any
     ip_address VARCHAR(45),                       -- User's IP address
     status ENUM('success', 'failure') NOT NULL,   -- Operation outcome
     error_message TEXT,                           -- Error details if failed
+    details TEXT,                                 -- Additional activity details
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE SET NULL,
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
 );
+
 
 -- Subscription plans table
 -- Purpose: Defines available subscription tiers

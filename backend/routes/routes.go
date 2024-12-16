@@ -57,6 +57,7 @@ func NewRouteHandlers(
 	keyFragmentModel *models.KeyFragmentModel,
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
+	compressionService *services.CompressionService,
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
@@ -79,9 +80,9 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:   EndUser.NewFileController(fileModel, activityLogModel, encryptionService, shamirService, keyFragmentModel),
+			UploadFileController:   EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService),
 			ViewFilesController:    EndUser.NewViewFilesController(fileModel),
-			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel),
+			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
 			ShareFileController:    EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),

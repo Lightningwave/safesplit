@@ -15,6 +15,7 @@ type ActivityLog struct {
 	IPAddress    string    `json:"ip_address"`
 	Status       string    `json:"status" gorm:"type:enum('success','failure')"`
 	ErrorMessage string    `json:"error_message,omitempty"`
+	Details      string    `json:"details,omitempty"` // Add this field
 	CreatedAt    time.Time `json:"created_at"`
 	User         User      `json:"user" gorm:"foreignKey:UserID"`
 }
@@ -61,7 +62,6 @@ func (m *ActivityLogModel) GetSystemLogs(filters map[string]interface{}, page, p
 	return logs, total, err
 }
 
-// LogActivity is a helper method to insert a new activity log
 func (m *ActivityLogModel) LogActivity(log *ActivityLog) error {
 	return m.db.Create(log).Error
 }

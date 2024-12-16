@@ -510,6 +510,15 @@ func (m *UserModel) GetUserSubscriptionDetails(sysAdmin *User, userID uint) (*Us
 	}, nil
 }
 
+func (m *UserModel) UpdateUserStorage(userID uint, size int64) error {
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return err
+	}
+
+	return m.db.Model(&user).Update("storage_used", user.StorageUsed+size).Error
+}
+
 // Role check methods
 func (u *User) IsEndUser() bool {
 	return u.Role == RoleEndUser

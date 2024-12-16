@@ -11,24 +11,27 @@ import (
 )
 
 type File struct {
-	ID             uint       `json:"id" gorm:"primaryKey"`
-	UserID         uint       `json:"user_id"`
-	FolderID       *uint      `json:"folder_id,omitempty"`
-	Name           string     `json:"name"`
-	OriginalName   string     `json:"original_name"`
-	FilePath       string     `json:"file_path"`
-	Size           int64      `json:"size"`
-	MimeType       string     `json:"mime_type"`
-	IsArchived     bool       `json:"is_archived" gorm:"default:false"`
-	IsDeleted      bool       `json:"is_deleted" gorm:"default:false"`
-	DeletedAt      *time.Time `json:"deleted_at"`
-	EncryptionIV   []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
-	EncryptionSalt []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
-	FileHash       string     `json:"file_hash"`
-	ShareCount     uint       `json:"share_count" gorm:"not null;default:2"`
-	Threshold      uint       `json:"threshold" gorm:"not null;default:2"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID               uint       `json:"id" gorm:"primaryKey"`
+	UserID           uint       `json:"user_id"`
+	FolderID         *uint      `json:"folder_id,omitempty"`
+	Name             string     `json:"name"`
+	OriginalName     string     `json:"original_name"`
+	FilePath         string     `json:"file_path"`
+	Size             int64      `json:"size" gorm:"not null"`
+	CompressedSize   int64      `json:"compressed_size"`
+	IsCompressed     bool       `json:"is_compressed" gorm:"default:false"`
+	CompressionRatio float64    `json:"compression_ratio"`
+	MimeType         string     `json:"mime_type"`
+	IsArchived       bool       `json:"is_archived" gorm:"default:false"`
+	IsDeleted        bool       `json:"is_deleted" gorm:"default:false"`
+	DeletedAt        *time.Time `json:"deleted_at"`
+	EncryptionIV     []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
+	EncryptionSalt   []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
+	FileHash         string     `json:"file_hash"`
+	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
+	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type FileModel struct {
