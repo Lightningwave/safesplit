@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { File, Loader } from 'lucide-react';
 import FileActions from './FileActions';
 
-const ViewFile = ({ searchQuery, user, selectedSection }) => {
+const ViewFile = ({ 
+    searchQuery, 
+    user, 
+    selectedSection, 
+    currentFolder, 
+    showRecentsOnly = false,
+    maxItems = null
+}) => {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -11,14 +18,17 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
     const fetchFiles = async () => {
         try {
             const token = localStorage.getItem('token');
-            console.log('Fetching files with token:', token);
-
             if (!token) {
                 setError('Authentication required');
                 return;
             }
 
-            const response = await fetch('http://localhost:8080/api/files', {
+            let url = 'http://localhost:8080/api/files';
+            if (currentFolder) {
+                url += `?folder_id=${currentFolder.id}`;
+            }
+
+            const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -32,7 +42,19 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
             }
 
             const data = await response.json();
-            setFiles(data.data?.files || []);
+            let filesList = data.data?.files || [];
+
+            // Sort by last modified date
+            filesList = filesList.sort((a, b) => 
+                new Date(b.created_at) - new Date(a.created_at)
+            );
+
+            // If maxItems is set, limit the number of files
+            if (maxItems && maxItems > 0) {
+                filesList = filesList.slice(0, maxItems);
+            }
+
+            setFiles(filesList);
             setError('');
         } catch (error) {
             console.error('Error fetching files:', error);
@@ -46,7 +68,7 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
         if (user) {
             fetchFiles();
         }
-    }, [user]);
+    }, [user, currentFolder, selectedSection]);
 
     const handleFileAction = async (action, file) => {
         switch (action) {
@@ -60,7 +82,7 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
     };
 
     const formatFileSize = (bytes) => {
-        if (bytes === 0) return '0 Bytes';
+        if (!bytes) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -90,28 +112,33 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
 
     const handleBulkSelection = (event) => {
         if (event.target.checked) {
-            setSelectedFiles(new Set(filteredFiles.map(file => file.id)));
+            const visibleFileIds = filteredFiles.map(file => file.id);
+            setSelectedFiles(new Set(visibleFileIds));
         } else {
             setSelectedFiles(new Set());
         }
     };
 
-    // Filter files based on search query
-    let filteredFiles = searchQuery
-        ? files.filter(file => 
+    // Filter files based on search query and section
+    let filteredFiles = files;
+
+    if (searchQuery) {
+        filteredFiles = filteredFiles.filter(file => 
             (file.original_name || file.name)
                 .toLowerCase()
                 .includes(searchQuery.toLowerCase())
-          )
-        : files;
+        );
+    }
 
-    // If the selected section is Archives, show only archived files
-    // If not Archives, show only non-archived files
     if (selectedSection === 'Archives') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === true);
-    } else {
+    } else if (selectedSection !== 'Dashboard') { // Don't filter archived files in Dashboard
         filteredFiles = filteredFiles.filter(file => file.is_archived === false);
     }
+
+    // For recents view, potentially hide some UI elements
+    const showCheckboxes = !showRecentsOnly;
+    const showActions = !showRecentsOnly;
 
     if (!user) {
         return (
@@ -141,19 +168,21 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
                     <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
                         <div className="col-span-5">
                             <div className="flex items-center space-x-4">
-                                <input 
-                                    type="checkbox"
-                                    onChange={handleBulkSelection}
-                                    checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
-                                    className="rounded"
-                                />
+                                {showCheckboxes && (
+                                    <input 
+                                        type="checkbox"
+                                        onChange={handleBulkSelection}
+                                        checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
+                                        className="rounded"
+                                    />
+                                )}
                                 <span>Name</span>
                             </div>
                         </div>
                         <div className="col-span-2">Size</div>
                         <div className="col-span-2">Folder</div>
                         <div className="col-span-2">Last Modified</div>
-                        <div className="col-span-1">Actions</div>
+                        {showActions && <div className="col-span-1">Actions</div>}
                     </div>
 
                     {filteredFiles.length === 0 ? (
@@ -165,12 +194,14 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
                             <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
                                 <div className="col-span-5">
                                     <div className="flex items-center space-x-4">
-                                        <input 
-                                            type="checkbox"
-                                            checked={selectedFiles.has(file.id)}
-                                            onChange={() => handleFileSelection(file.id)}
-                                            className="rounded"
-                                        />
+                                        {showCheckboxes && (
+                                            <input 
+                                                type="checkbox"
+                                                checked={selectedFiles.has(file.id)}
+                                                onChange={() => handleFileSelection(file.id)}
+                                                className="rounded"
+                                            />
+                                        )}
                                         <File size={20} className="text-gray-400" />
                                         <span className="truncate" title={file.original_name || file.name}>
                                             {file.original_name || file.name}
@@ -180,13 +211,15 @@ const ViewFile = ({ searchQuery, user, selectedSection }) => {
                                 <div className="col-span-2">{formatFileSize(file.size)}</div>
                                 <div className="col-span-2">{file.folder || 'My Files'}</div>
                                 <div className="col-span-2">{formatDate(file.created_at)}</div>
-                                <div className="col-span-1">
-                                    <FileActions 
-                                        file={file} 
-                                        onRefresh={fetchFiles}
-                                        onAction={handleFileAction}
-                                    />
-                                </div>
+                                {showActions && (
+                                    <div className="col-span-1">
+                                        <FileActions 
+                                            file={file} 
+                                            onRefresh={fetchFiles}
+                                            onAction={handleFileAction}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         ))
                     )}
