@@ -29,6 +29,9 @@ type EndUserHandlers struct {
 	DeleteFileController   *EndUser.DeleteFileController
 	ArchiveFileController  *EndUser.ArchiveFileController
 	ShareFileController    *EndUser.ShareFileController
+	CreateFolderController *EndUser.CreateFolderController
+	ViewFolderController   *EndUser.ViewFolderController
+	DeleteFolderController *EndUser.DeleteFolderController
 }
 
 type SuperAdminHandlers struct {
@@ -53,6 +56,7 @@ func NewRouteHandlers(
 	userModel *models.UserModel,
 	activityLogModel *models.ActivityLogModel,
 	fileModel *models.FileModel,
+	folderModel *models.FolderModel,
 	fileShareModel *models.FileShareModel,
 	keyFragmentModel *models.KeyFragmentModel,
 	encryptionService *services.EncryptionService,
@@ -86,6 +90,9 @@ func NewRouteHandlers(
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
 			ShareFileController:    EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
+			CreateFolderController: EndUser.NewCreateFolderController(folderModel, activityLogModel),
+			ViewFolderController:   EndUser.NewViewFolderController(folderModel),
+			DeleteFolderController: EndUser.NewDeleteFolderController(folderModel, activityLogModel),
 		},
 	}
 }
@@ -128,6 +135,7 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 }
 
 func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
+	// Existing files routes
 	files := protected.Group("/files")
 	{
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
@@ -137,6 +145,14 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
 		files.POST("/:id/share", handlers.ShareFileController.CreateShare)
 		files.GET("/share/:shareLink", handlers.ShareFileController.AccessShare)
+	}
+
+	folders := protected.Group("/folders")
+	{
+		folders.GET("", handlers.ViewFolderController.ListFolders)           // Get root folders
+		folders.GET("/:id", handlers.ViewFolderController.GetFolderContents) // Get folder contents
+		folders.POST("", handlers.CreateFolderController.Create)             // Create new folder
+		folders.DELETE("/:id", handlers.DeleteFolderController.Delete)       // Delete folder
 	}
 }
 
