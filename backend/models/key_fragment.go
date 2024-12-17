@@ -97,3 +97,14 @@ func (m *KeyFragmentModel) GetFragmentsByType(fileID uint, holderType HolderType
 
 	return fragments, nil
 }
+
+func (m *KeyFragmentModel) GetUserFragmentsForFile(fileID uint) ([]KeyFragment, error) {
+	var fragments []KeyFragment
+	err := m.db.Where("file_id = ? AND holder_type = ?", fileID, UserHolder).
+		Order("fragment_index asc").
+		Find(&fragments).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve user fragments: %w", err)
+	}
+	return fragments, nil
+}
