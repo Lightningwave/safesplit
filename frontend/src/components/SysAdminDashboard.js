@@ -156,11 +156,20 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                   <ul className="mt-2 space-y-1 pl-4">
                     <li>
                       <button 
+                        onClick={() => handleUserTypeSelect('all')}
+                        className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-700
+                          ${selectedUserType === 'all' ? 'bg-gray-700' : ''}`}
+                      >
+                        All Users
+                      </button>
+                    </li>
+                    <li>
+                      <button 
                         onClick={() => handleUserTypeSelect('premium')}
                         className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-700
                           ${selectedUserType === 'premium' ? 'bg-gray-700' : ''}`}
                       >
-                        Premium End user
+                        Premium End User
                       </button>
                     </li>
                     <li>
@@ -169,7 +178,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                         className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-700
                           ${selectedUserType === 'normal' ? 'bg-gray-700' : ''}`}
                       >
-                        End user
+                        End User
                       </button>
                     </li>
                   </ul>
@@ -225,7 +234,9 @@ const SysAdminDashboard = ({ user, onLogout }) => {
       <div className="flex-1 overflow-auto">
         <div className="p-8">
           <div className="mb-8">
-            <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+            <h1 className="text-2xl font-semibold">
+              {selectedSection === 'Dashboard' ? 'Admin Dashboard' : `${selectedSection}`}
+            </h1>
             <p className="text-gray-600 mt-1">
               {selectedSection === 'Dashboard' 
                 ? 'Monitor and manage system operations'

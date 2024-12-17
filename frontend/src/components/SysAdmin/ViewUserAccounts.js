@@ -183,6 +183,17 @@ const ViewUserAccounts = ({ selectedType }) => {
     );
   }
 
+  // Dynamically set the header <h2> based on selectedType
+  let headerText = 'Users';  // Default text
+
+  if (selectedType === 'all') {
+    headerText = 'All Users';
+  } else if (selectedType === 'premium') {
+    headerText = 'Premium End Users';
+  } else if (selectedType === 'normal') {
+    headerText = 'End Users';
+  }
+
   return (
     <>
       <div className="space-y-8">
@@ -195,7 +206,7 @@ const ViewUserAccounts = ({ selectedType }) => {
 
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Users</h2>
+            <h2 className="text-lg font-semibold">{headerText}</h2>
           </div>
 
           <div className="bg-white rounded-lg shadow">
