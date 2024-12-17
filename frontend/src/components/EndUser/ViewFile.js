@@ -8,7 +8,8 @@ const ViewFile = ({
     selectedSection, 
     currentFolder, 
     showRecentsOnly = false,
-    maxItems = null
+    maxItems = null,
+    refreshTrigger = 0
 }) => {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -34,6 +35,7 @@ const ViewFile = ({
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include'
             });
 
             if (!response.ok) {
@@ -67,14 +69,15 @@ const ViewFile = ({
     useEffect(() => {
         if (user) {
             fetchFiles();
+            setSelectedFiles(new Set());
         }
-    }, [user, currentFolder, selectedSection]);
+    }, [user, currentFolder, selectedSection, refreshTrigger]);
 
     const handleFileAction = async (action, file) => {
         switch (action) {
             case 'delete':
             case 'archive':
-                await fetchFiles(); // Refresh the file list after action
+                await fetchFiles();
                 break;
             default:
                 break;
@@ -119,7 +122,6 @@ const ViewFile = ({
         }
     };
 
-    // Filter files based on search query and section
     let filteredFiles = files;
 
     if (searchQuery) {
@@ -132,11 +134,10 @@ const ViewFile = ({
 
     if (selectedSection === 'Archives') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === true);
-    } else if (selectedSection !== 'Dashboard') { // Don't filter archived files in Dashboard
+    } else if (selectedSection !== 'Dashboard') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === false);
     }
 
-    // For recents view, potentially hide some UI elements
     const showCheckboxes = !showRecentsOnly;
     const showActions = !showRecentsOnly;
 
@@ -180,14 +181,14 @@ const ViewFile = ({
                             </div>
                         </div>
                         <div className="col-span-2">Size</div>
-                        <div className="col-span-2">Folder</div>
+                        <div className="col-span-2">Location</div>
                         <div className="col-span-2">Last Modified</div>
                         {showActions && <div className="col-span-1">Actions</div>}
                     </div>
 
                     {filteredFiles.length === 0 ? (
                         <div className="text-gray-500 text-center p-8">
-                            No files found
+                            No files found in {currentFolder ? `folder "${currentFolder.name}"` : 'this location'}
                         </div>
                     ) : (
                         filteredFiles.map(file => (
@@ -209,7 +210,7 @@ const ViewFile = ({
                                     </div>
                                 </div>
                                 <div className="col-span-2">{formatFileSize(file.size)}</div>
-                                <div className="col-span-2">{file.folder || 'My Files'}</div>
+                                <div className="col-span-2">{file.folder_name}</div>
                                 <div className="col-span-2">{formatDate(file.created_at)}</div>
                                 {showActions && (
                                     <div className="col-span-1">

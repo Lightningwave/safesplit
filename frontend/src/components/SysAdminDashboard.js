@@ -65,10 +65,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* User Accounts Section */}
-      <div>
-        <ViewUserAccounts selectedType={selectedUserType} />
-      </div>
+    
 
       {/* Recent Viewed Users Section */}
       <div>

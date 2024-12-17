@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"safesplit/models"
 	"safesplit/services"
 	"strconv"
@@ -64,20 +64,26 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 
 	user, exists := ctx.Get("user")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"status": "error",
-			"error":  "Unauthorized access",
-		})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "error": "Unauthorized access"})
 		return
 	}
 
 	currentUser, ok := user.(*models.User)
 	if !ok {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Invalid user data",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Invalid user data"})
 		return
+	}
+
+	// Get current folder ID (optional)
+	var folderID *uint
+	if folderIDStr := ctx.PostForm("folder_id"); folderIDStr != "" {
+		id, err := strconv.ParseUint(folderIDStr, 10, 32)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Invalid folder ID format"})
+			return
+		}
+		parsedID := uint(id)
+		folderID = &parsedID
 	}
 
 	nShares := ctx.PostForm("shares")
@@ -85,136 +91,72 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 
 	n, err := strconv.Atoi(nShares)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "Invalid number of shares provided",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Invalid number of shares provided"})
 		return
 	}
 
 	k, err := strconv.Atoi(threshold)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "Invalid threshold provided",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Invalid threshold provided"})
 		return
 	}
 
 	if err := c.validateShamirParameters(n, k); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": err.Error()})
 		return
 	}
 
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
 		log.Printf("Error receiving file: %v", err)
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "No file was provided",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "No file was provided"})
 		return
 	}
 
 	// Check storage quota
 	if !currentUser.HasAvailableStorage(fileHeader.Size) {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "Insufficient storage space",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Insufficient storage space"})
 		return
 	}
 
-	src, err := fileHeader.Open()
+	// Process file upload
+	processedFile, err := c.processFileUpload(fileHeader, n, k)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to read file",
-		})
-		return
-	}
-	defer src.Close()
-
-	content, err := io.ReadAll(src)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to read file content",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": err.Error()})
 		return
 	}
 
-	// Calculate original file hash
-	hash := sha256.Sum256(content)
-	fileHash := base64.StdEncoding.EncodeToString(hash[:])
-
-	// Compress content
-	compressed, ratio, err := c.compressionService.Compress(content)
-	if err != nil {
-		log.Printf("Compression failed: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to compress file",
-		})
-		return
-	}
-
-	// Encrypt the compressed content
-	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(compressed, n, k)
-	if err != nil {
-		log.Printf("Encryption failed: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to encrypt file",
-		})
-		return
-	}
-
-	storageDir := filepath.Join("storage", "files")
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		log.Printf("Failed to create storage directory: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to prepare storage",
-		})
-		return
-	}
-
+	// Create file record
 	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
-	storagePath := filepath.Join(storageDir, encryptedFileName)
-
 	fileRecord := &models.File{
 		UserID:           currentUser.ID,
+		FolderID:         folderID, // Add this line to set the folder ID
 		Name:             encryptedFileName,
 		OriginalName:     fileHeader.Filename,
-		FilePath:         storagePath,
 		Size:             fileHeader.Size,
-		CompressedSize:   int64(len(compressed)),
+		CompressedSize:   int64(len(processedFile.compressed)),
 		MimeType:         fileHeader.Header.Get("Content-Type"),
-		EncryptionIV:     iv,
-		EncryptionSalt:   salt,
-		FileHash:         fileHash,
+		EncryptionIV:     processedFile.iv,
+		EncryptionSalt:   processedFile.salt,
+		FileHash:         processedFile.fileHash,
 		ShareCount:       uint(n),
 		Threshold:        uint(k),
 		IsCompressed:     true,
-		CompressionRatio: ratio,
+		CompressionRatio: processedFile.ratio,
 	}
 
-	if err := os.WriteFile(storagePath, encrypted, 0600); err != nil {
-		log.Printf("Failed to save encrypted file: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to save file",
-		})
+	// Get storage path from model
+	storagePath := c.fileModel.GenerateStoragePath(encryptedFileName)
+
+	// Save encrypted file
+	if err := os.WriteFile(storagePath, processedFile.encrypted, 0600); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to save file"})
 		return
 	}
 
-	if err := c.fileModel.CreateFileWithFragments(fileRecord, shares, c.keyFragmentModel); err != nil {
+	// Create file record with fragments
+	if err := c.fileModel.CreateFileWithFragments(fileRecord, processedFile.shares, c.keyFragmentModel); err != nil {
 		os.Remove(storagePath)
-		log.Printf("Database error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  fmt.Sprintf("Failed to save file information: %v", err),
@@ -222,39 +164,78 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		return
 	}
 
-	// Update user's storage usage using UserModel
-	if err := c.userModel.UpdateUserStorage(currentUser.ID, fileRecord.Size); err != nil {
-		os.Remove(storagePath)
-		log.Printf("Failed to update storage usage: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to update storage usage",
-		})
-		return
-	}
-
+	// Log activity
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       currentUser.ID,
 		ActivityType: "upload",
 		FileID:       &fileRecord.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
-		Details:      fmt.Sprintf("File compressed to %.2f%% of original size", ratio*100),
+		Details:      fmt.Sprintf("File uploaded and compressed to %.2f%% of original size", processedFile.ratio*100),
 	}); err != nil {
 		log.Printf("Failed to log activity: %v", err)
 	}
 
-	log.Printf("File upload successful: %s with %d shares and threshold of %d", fileRecord.Name, n, k)
 	ctx.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "File uploaded successfully",
 		"data": gin.H{
 			"file": fileRecord,
 			"compressionStats": gin.H{
-				"originalSize":     fileHeader.Size,
-				"compressedSize":   len(compressed),
-				"compressionRatio": fmt.Sprintf("%.2f%%", ratio*100),
+				"originalSize":     fileRecord.Size,
+				"compressedSize":   fileRecord.CompressedSize,
+				"compressionRatio": fmt.Sprintf("%.2f%%", processedFile.ratio*100),
 			},
+			"folder_id": folderID,
 		},
 	})
+}
+
+type processedFile struct {
+	compressed []byte
+	encrypted  []byte
+	iv         []byte
+	salt       []byte
+	shares     []services.KeyShare
+	fileHash   string
+	ratio      float64
+}
+
+func (c *UploadFileController) processFileUpload(fileHeader *multipart.FileHeader, n, k int) (*processedFile, error) {
+	src, err := fileHeader.Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	defer src.Close()
+
+	content, err := io.ReadAll(src)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	// Calculate hash
+	hash := sha256.Sum256(content)
+	fileHash := base64.StdEncoding.EncodeToString(hash[:])
+
+	// Compress content
+	compressed, ratio, err := c.compressionService.Compress(content)
+	if err != nil {
+		return nil, fmt.Errorf("compression failed: %w", err)
+	}
+
+	// Encrypt the compressed content
+	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(compressed, n, k)
+	if err != nil {
+		return nil, fmt.Errorf("encryption failed: %w", err)
+	}
+
+	return &processedFile{
+		compressed: compressed,
+		encrypted:  encrypted,
+		iv:         iv,
+		salt:       salt,
+		shares:     shares,
+		fileHash:   fileHash,
+		ratio:      ratio,
+	}, nil
 }

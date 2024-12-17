@@ -11,11 +11,13 @@ import (
 
 type ViewFolderController struct {
 	folderModel *models.FolderModel
+	fileModel   *models.FileModel
 }
 
-func NewViewFolderController(folderModel *models.FolderModel) *ViewFolderController {
+func NewViewFolderController(folderModel *models.FolderModel, fileModel *models.FileModel) *ViewFolderController {
 	return &ViewFolderController{
 		folderModel: folderModel,
+		fileModel:   fileModel,
 	}
 }
 
@@ -49,10 +51,17 @@ func (c *ViewFolderController) ListFolders(ctx *gin.Context) {
 		return
 	}
 
+	// Get files in root folder (where folder_id is null)
+	files, err := c.fileModel.ListUserFilesInFolder(currentUser.ID, nil)
+	if err != nil {
+		log.Printf("Error fetching root files: %v", err)
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
 			"folders": folders,
+			"files":   files,
 		},
 	})
 }
@@ -86,7 +95,10 @@ func (c *ViewFolderController) GetFolderContents(ctx *gin.Context) {
 		return
 	}
 
-	folder, err := c.folderModel.GetFolderContents(uint(folderID), currentUser.ID)
+	id := uint(folderID)
+
+	// Get folder and its subfolders
+	folder, err := c.folderModel.GetFolderContents(id, currentUser.ID)
 	if err != nil {
 		log.Printf("Error fetching folder contents: %v", err)
 		status := http.StatusInternalServerError
@@ -100,8 +112,14 @@ func (c *ViewFolderController) GetFolderContents(ctx *gin.Context) {
 		return
 	}
 
+	// Get files in this folder
+	files, err := c.fileModel.ListUserFilesInFolder(currentUser.ID, &id)
+	if err != nil {
+		log.Printf("Error fetching folder files: %v", err)
+	}
+
 	// Get folder path
-	path, err := c.folderModel.GetFolderPath(uint(folderID))
+	path, err := c.folderModel.GetFolderPath(id)
 	if err != nil {
 		log.Printf("Error getting folder path: %v", err)
 	}
@@ -110,6 +128,7 @@ func (c *ViewFolderController) GetFolderContents(ctx *gin.Context) {
 		"status": "success",
 		"data": gin.H{
 			"folder": folder,
+			"files":  files,
 			"path":   path,
 		},
 	})
