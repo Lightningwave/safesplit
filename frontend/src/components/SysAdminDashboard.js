@@ -94,7 +94,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
   );
 
   const renderAccountManagementContent = () => (
-    <div className="space-y-8">
+    <div>
       <ViewUserAccounts selectedType={selectedUserType} />
     </div>
   );
