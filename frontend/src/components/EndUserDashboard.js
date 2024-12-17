@@ -224,7 +224,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
                   user={user}
                   selectedSection={selectedSection}
                   currentFolder={currentFolder}
-                  showRecentsOnly={true} // Enable recent files view
+                  showRecentsOnly={true} 
                   refreshTrigger={refreshTrigger}
               />
           </div>
