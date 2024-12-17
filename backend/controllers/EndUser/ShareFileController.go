@@ -5,10 +5,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"safesplit/models"
-	"safesplit/services"
 	"strings"
 	"time"
+
+	"safesplit/models"
+	"safesplit/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -118,7 +119,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		IsActive:             true,
 	}
 
-	if err := c.fileShareModel.CreateFileShare(share, req.Password); err != nil {
+	if err := c.fileShareModel.CreateFileShareWithStatus(share, req.Password); err != nil {
 		log.Printf("Share creation error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
@@ -166,7 +167,7 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	}
 
 	allFragments, err := c.keyFragmentModel.GetKeyFragments(share.FileID)
-	if err != nil {
+	if err != nil || len(allFragments) == 0 {
 		log.Printf("Failed to retrieve file fragments: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
@@ -263,5 +264,7 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	ctx.Header("Content-Length", fmt.Sprintf("%d", len(decryptedData)))
 	ctx.Header("X-Original-Filename", url.QueryEscape(file.OriginalName))
 
+	// Send the decrypted file data as a downloadable attachment
 	ctx.Data(http.StatusOK, file.MimeType, decryptedData)
+
 }

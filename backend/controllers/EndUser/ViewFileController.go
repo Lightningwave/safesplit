@@ -39,6 +39,7 @@ type FileResponse struct {
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count"`
 	Threshold        uint       `json:"threshold"`
+	IsShared         bool       `json:"is_shared"` // Added isShared field
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	FolderName       string     `json:"folder_name"`
@@ -94,7 +95,7 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 	} else {
 		// Get files from root
 		files, err = c.fileModel.ListRootFiles(currentUser.ID)
-		folderName = "Root"
+		folderName = "My Files"
 	}
 
 	if err != nil {
@@ -126,6 +127,7 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 			FileHash:         file.FileHash,
 			ShareCount:       file.ShareCount,
 			Threshold:        file.Threshold,
+			IsShared:         file.IsShared,
 			CreatedAt:        file.CreatedAt,
 			UpdatedAt:        file.UpdatedAt,
 			FolderName:       folderName,

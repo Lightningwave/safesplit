@@ -31,6 +31,7 @@ type File struct {
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
 	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
+	IsShared         bool       `json:"is_shared" gorm:"default:false"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }

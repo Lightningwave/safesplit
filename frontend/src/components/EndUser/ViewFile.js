@@ -77,6 +77,7 @@ const ViewFile = ({
         switch (action) {
             case 'delete':
             case 'archive':
+            case 'share':
                 await fetchFiles();
                 break;
             default:
@@ -124,6 +125,7 @@ const ViewFile = ({
 
     let filteredFiles = files;
 
+    // Apply search filter
     if (searchQuery) {
         filteredFiles = filteredFiles.filter(file => 
             (file.original_name || file.name)
@@ -132,11 +134,16 @@ const ViewFile = ({
         );
     }
 
+    // Apply section filters
     if (selectedSection === 'Archives') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === true);
+    } else if (selectedSection === 'Shared Files') {  
+        filteredFiles = filteredFiles.filter(file => file.is_shared === true);
     } else if (selectedSection !== 'Dashboard') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === false);
     }
+    
+    
 
     const showCheckboxes = !showRecentsOnly;
     const showActions = !showRecentsOnly;
@@ -188,7 +195,10 @@ const ViewFile = ({
 
                     {filteredFiles.length === 0 ? (
                         <div className="text-gray-500 text-center p-8">
-                            No files found in {currentFolder ? `folder "${currentFolder.name}"` : 'this location'}
+                            {selectedSection === 'Shared Files' 
+                                ? "No shared files found"
+                                : `No files found in ${currentFolder ? `folder "${currentFolder.name}"` : 'this location'}`
+                            }
                         </div>
                     ) : (
                         filteredFiles.map(file => (
@@ -203,7 +213,9 @@ const ViewFile = ({
                                                 className="rounded"
                                             />
                                         )}
-                                        <File size={20} className="text-gray-400" />
+                                        <div className="flex items-center space-x-2">
+                                            <File size={20} className="text-gray-400" />
+                                        </div>
                                         <span className="truncate" title={file.original_name || file.name}>
                                             {file.original_name || file.name}
                                         </span>
