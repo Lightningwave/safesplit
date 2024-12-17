@@ -85,13 +85,13 @@ func NewRouteHandlers(
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:   EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService),
-			ViewFilesController:    EndUser.NewViewFilesController(fileModel),
+			ViewFilesController:    EndUser.NewViewFilesController(fileModel, folderModel),
 			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
 			ShareFileController:    EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
 			CreateFolderController: EndUser.NewCreateFolderController(folderModel, activityLogModel),
-			ViewFolderController:   EndUser.NewViewFolderController(folderModel),
+			ViewFolderController:   EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController: EndUser.NewDeleteFolderController(folderModel, activityLogModel),
 		},
 	}

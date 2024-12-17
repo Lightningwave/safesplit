@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, ChevronDown, ChevronRight, Search, Upload, Folder, ChevronLeft, MoreVertical } from 'lucide-react';
 import UploadFile from './EndUser/UploadFile';
 import ViewFile from './EndUser/ViewFile';
+import ViewFolder from './EndUser/ViewFolder';
 import Settings from './EndUser/Settings';
 import ContactUs from './EndUser/ContactUs';
 import CreateFolder from './EndUser/CreateFolder';
@@ -19,23 +20,33 @@ const EndUserDashboard = ({ user, onLogout }) => {
     const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
     const [isDeleteFolderOpen, setIsDeleteFolderOpen] = useState(false);
     const [folderToDelete, setFolderToDelete] = useState(null);
+    const [error, setError] = useState(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     useEffect(() => {
         if (selectedSection === 'Dashboard') {
-            fetchFolders();
+            refreshCurrentView();
         }
     }, [selectedSection]);
 
-    const fetchFolders = async (parentId = null) => {
+    const refreshCurrentView = async () => {
+        if (currentFolder) {
+            await fetchFolderContents(currentFolder.id);
+        } else {
+            await fetchFolders();
+        }
+    };
+
+    const triggerRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
+    };
+
+    const fetchFolders = async () => {
         setIsLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('token');
-            let url = 'http://localhost:8080/api/folders';
-            if (parentId) {
-                url += `?parent_id=${parentId}`;
-            }
-
-            const response = await fetch(url, {
+            const response = await fetch('http://localhost:8080/api/folders', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -61,6 +72,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
             }
         } catch (error) {
             console.error('Error fetching folders:', error);
+            setError('Failed to load folders. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -68,6 +80,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
 
     const fetchFolderContents = async (folderId) => {
         setIsLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('token');
             const response = await fetch(`http://localhost:8080/api/folders/${folderId}`, {
@@ -92,13 +105,15 @@ const EndUserDashboard = ({ user, onLogout }) => {
             if (result.status === 'success') {
                 setCurrentFolder(result.data.folder);
                 setFolderPath(result.data.path || []);
-                // Fetch folders that might be inside this folder
-                fetchFolders(folderId);
+                setFolders(result.data.folder.sub_folders || []);
             } else {
                 throw new Error(result.error);
             }
         } catch (error) {
             console.error('Error fetching folder contents:', error);
+            setError('Failed to load folder contents. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -106,16 +121,17 @@ const EndUserDashboard = ({ user, onLogout }) => {
         setSearchQuery(event.target.value);
     };
 
-    const handleUploadComplete = () => {
-        if (currentFolder) {
-            fetchFolderContents(currentFolder.id);
-        } else {
-            fetchFolders();
-        }
+    const handleUploadComplete = async () => {
+        triggerRefresh();
+        await refreshCurrentView();
     };
 
-    const handleFolderClick = (folder) => {
-        fetchFolderContents(folder.id);
+    const handleFolderClick = async (folder) => {
+        try {
+            await fetchFolderContents(folder.id);
+        } catch (error) {
+            setError('Failed to open folder. Please try again.');
+        }
     };
 
     const handleFolderDelete = (folder) => {
@@ -123,62 +139,19 @@ const EndUserDashboard = ({ user, onLogout }) => {
         setIsDeleteFolderOpen(true);
     };
 
-    const handleBackClick = () => {
-        if (folderPath.length > 1) {
-            const parentFolder = folderPath[folderPath.length - 2];
-            fetchFolderContents(parentFolder.id);
-        } else {
-            setCurrentFolder(null);
-            setFolderPath([]);
-            fetchFolders();
+    const handleBackClick = async () => {
+        try {
+            if (folderPath.length > 1) {
+                const parentFolder = folderPath[folderPath.length - 2];
+                await fetchFolderContents(parentFolder.id);
+            } else {
+                setCurrentFolder(null);
+                setFolderPath([]);
+                await fetchFolders();
+            }
+        } catch (error) {
+            setError('Failed to navigate back. Please try again.');
         }
-    };
-
-    const renderFolders = () => {
-        if (isLoading) {
-            return <div className="text-gray-600">Loading...</div>;
-        }
-
-        return (
-            <div>
-                {currentFolder && (
-                    <div className="mb-4">
-                        <button
-                            onClick={handleBackClick}
-                            className="flex items-center text-gray-600 hover:text-gray-900"
-                        >
-                            <ChevronLeft size={20} className="mr-1" />
-                            Back
-                        </button>
-                    </div>
-                )}
-
-                {currentFolder && renderBreadcrumbs()}
-
-                <div className="grid grid-cols-4 gap-4">
-                    {folders.map((folder) => (
-                        <div
-                            key={folder.id}
-                            className="group relative"
-                        >
-                            <button
-                                onClick={() => handleFolderClick(folder)}
-                                className="w-full flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                            >
-                                <Folder className="text-gray-400 mr-3" size={24} />
-                                <span className="text-gray-700 font-medium">{folder.name}</span>
-                            </button>
-                            <button
-                                onClick={() => handleFolderDelete(folder)}
-                                className="absolute right-2 top-2 p-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700"
-                            >
-                                <MoreVertical size={16} />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
     };
 
     const renderBreadcrumbs = () => {
@@ -194,14 +167,16 @@ const EndUserDashboard = ({ user, onLogout }) => {
                     }}
                     className="hover:text-gray-900"
                 >
-                    Dashboard
+                    Root
                 </button>
                 {folderPath.map((folder, index) => (
                     <React.Fragment key={folder.id}>
                         <ChevronRight size={16} className="text-gray-400" />
                         <button
                             onClick={() => fetchFolderContents(folder.id)}
-                            className="hover:text-gray-900"
+                            className={`hover:text-gray-900 ${
+                                index === folderPath.length - 1 ? 'font-medium' : ''
+                            }`}
                         >
                             {folder.name}
                         </button>
@@ -211,36 +186,52 @@ const EndUserDashboard = ({ user, onLogout }) => {
         );
     };
 
-    const renderDashboard = () => {
-        return (
-            <div className="space-y-8">
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-semibold">Folders</h2>
-                        <button 
-                            onClick={() => setIsCreateFolderOpen(true)}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                        >
-                            New Folder
-                        </button>
-                    </div>
-                    {renderFolders()}
-                </div>
+    const renderDashboard = () => (
+      <div className="space-y-8">
+          {/* Folders Section */}
+          <div>
+              <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center space-x-2">
+                      <h2 className="text-xl font-semibold">
+                          {currentFolder ? currentFolder.name : 'Folders'}
+                      </h2>
+                      <span className="text-sm text-gray-500">
+                          ({folders.length} {folders.length === 1 ? 'folder' : 'folders'})
+                      </span>
+                  </div>
+                  <button 
+                      onClick={() => setIsCreateFolderOpen(true)}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                  >
+                      New Folder
+                  </button>
+              </div>
+              <ViewFolder 
+                  currentFolder={currentFolder}
+                  onFolderClick={handleFolderClick}
+                  onFolderDelete={handleFolderDelete}
+                  onBackClick={handleBackClick}
+                  selectedSection={selectedSection}
+                  refreshTrigger={refreshTrigger}
+              />
+          </div>
+  
+          {/* Recent Files Section */}
+          <div>
+              <h2 className="text-xl font-semibold mb-4">Recent</h2>
+              <ViewFile 
+                  searchQuery={searchQuery}
+                  user={user}
+                  selectedSection={selectedSection}
+                  currentFolder={currentFolder}
+                  showRecentsOnly={true} // Enable recent files view
+                  refreshTrigger={refreshTrigger}
+              />
+          </div>
+      </div>
+  );
+  
 
-                <div>
-                    <h2 className="text-xl font-semibold mb-4">Recents</h2>
-                    <ViewFile 
-                        searchQuery=""
-                        user={user}
-                        selectedSection={selectedSection}
-                        currentFolder={currentFolder}
-                        showRecentsOnly={true}
-                        maxItems={5}
-                    />
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="flex h-screen bg-white">

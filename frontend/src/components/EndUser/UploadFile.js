@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, X, Info } from 'lucide-react';
+import { Upload, X, Info, FolderIcon } from 'lucide-react';
 
-const UploadFile = ({ isOpen, onClose, onUpload }) => {
+const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
@@ -60,12 +60,18 @@ const UploadFile = ({ isOpen, onClose, onUpload }) => {
             formData.append('shares', shares);
             formData.append('threshold', threshold);
 
+            // Add folder_id if we're in a folder
+            if (currentFolder?.id) {
+                formData.append('folder_id', currentFolder.id);
+            }
+
             console.log('Starting file upload:', {
                 fileName: selectedFile.name,
                 fileSize: selectedFile.size,
                 fileType: selectedFile.type,
                 shares,
-                threshold
+                threshold,
+                folderId: currentFolder?.id || 'root'
             });
 
             const response = await fetch('http://localhost:8080/api/files/upload', {
@@ -125,7 +131,15 @@ const UploadFile = ({ isOpen, onClose, onUpload }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">Upload File</h2>
+                    <div>
+                        <h2 className="text-xl font-semibold">Upload File</h2>
+                        {currentFolder && (
+                            <p className="text-sm text-gray-500 mt-1 flex items-center">
+                                <FolderIcon size={16} className="mr-1" />
+                                To: {currentFolder.name}
+                            </p>
+                        )}
+                    </div>
                     <button 
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700"

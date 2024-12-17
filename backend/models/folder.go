@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"gorm.io/gorm"
@@ -137,4 +138,67 @@ func (m *FolderModel) GetFolderPath(folderID uint) ([]Folder, error) {
 	}
 
 	return path, nil
+}
+
+// CreateFolderPath creates the folder hierarchy if it doesn't exist and returns the final folder ID
+func (m *FolderModel) CreateFolderPath(userID uint, folderPath string) (*uint, error) {
+	if folderPath == "" || folderPath == "/" {
+		return nil, nil // Root folder
+	}
+
+	tx := m.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var currentParentID *uint
+	folders := filepath.SplitList(folderPath)
+
+	for _, folderName := range folders {
+		var existingFolder Folder
+		err := tx.Where("user_id = ? AND name = ? AND parent_folder_id = ? AND is_archived = ?",
+			userID, folderName, currentParentID, false).First(&existingFolder).Error
+
+		if err == gorm.ErrRecordNotFound {
+			// Create new folder
+			newFolder := &Folder{
+				UserID:         userID,
+				Name:           folderName,
+				ParentFolderID: currentParentID,
+			}
+
+			if err := tx.Create(newFolder).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to create folder %s: %w", folderName, err)
+			}
+			currentParentID = &newFolder.ID
+		} else if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("database error while checking folder %s: %w", folderName, err)
+		} else {
+			currentParentID = &existingFolder.ID
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit folder creation transaction: %w", err)
+	}
+
+	return currentParentID, nil
+}
+
+// GetFolderByID gets a folder with user verification
+func (m *FolderModel) GetFolderByID(folderID, userID uint) (*Folder, error) {
+	var folder Folder
+	err := m.db.Where("id = ? AND user_id = ? AND is_archived = ?", folderID, userID, false).
+		First(&folder).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("folder not found or access denied")
+		}
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	return &folder, nil
 }
