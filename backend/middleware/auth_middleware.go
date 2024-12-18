@@ -95,6 +95,31 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 		c.Next()
 	}
 }
+func PremiumUserMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		currentUser, ok := user.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user data"})
+			c.Abort()
+			return
+		}
+
+		if !currentUser.IsPremiumUser() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Premium access required"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func SuperAdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {

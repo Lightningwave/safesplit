@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Shield, Loader2, AlertCircle, Search, Save } from 'lucide-react';
 
@@ -17,37 +16,72 @@ const UpdateUserPermissions = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-
-      if (!response.ok) throw new Error('Failed to fetch users');
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
+      
       const data = await response.json();
-      setUsers(data.users);
+      // Ensure we're accessing the correct data structure
+      const usersList = Array.isArray(data.data) ? data.data : 
+                       Array.isArray(data) ? data : [];
+      setUsers(usersList);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-
-  const updatePermissions = async (userId, readAccess, writeAccess) => {
+  
+  const updatePermissions = async (userId, updates) => {
+    if (!userId) {
+      console.error('No user ID provided');
+      return;
+    }
+  
     setSaving(userId);
+    setError(null);
+    
     try {
-      const response = await fetch(`http://localhost:8080/api/system/users/${userId}/access`, {
+      const currentUser = users.find(u => u.id === userId);
+      if (!currentUser) {
+        throw new Error('User not found');
+      }
+  
+      const response = await fetch(`http://localhost:8080/api/system/users/${userId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ read_access: readAccess, write_access: writeAccess })
+        body: JSON.stringify({
+          read_access: updates.readAccess,
+          write_access: updates.writeAccess,
+          username: currentUser.username,
+          email: currentUser.email,
+          account_type: currentUser.subscription_status
+        })
       });
-
-      if (!response.ok) throw new Error('Failed to update permissions');
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update permissions');
+      }
       
-      setUsers(users.map(user => 
-        user.id === userId 
-          ? { ...user, read_access: readAccess, write_access: writeAccess }
-          : user
-      ));
-
+      const data = await response.json();
+      
+      // Handle different response data structures
+      const updatedUser = data.data?.user || data.user || data;
+      
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId 
+            ? { ...user, ...updatedUser }
+            : user
+        )
+      );
+  
       setSuccessMessage('Permissions updated successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -62,8 +96,8 @@ const UpdateUserPermissions = () => {
   }, []);
 
   const filteredUsers = users.filter(user =>
-    user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -77,6 +111,7 @@ const UpdateUserPermissions = () => {
 
   return (
     <div className="bg-white rounded-lg shadow">
+      {/* Header section */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex justify-between items-center">
           <div>
@@ -96,6 +131,7 @@ const UpdateUserPermissions = () => {
         </div>
       </div>
 
+      {/* Error and Success Messages */}
       {error && (
         <div className="p-4 m-4 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center text-red-600">
@@ -114,6 +150,7 @@ const UpdateUserPermissions = () => {
         </div>
       )}
 
+      {/* Users Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50">
@@ -145,8 +182,12 @@ const UpdateUserPermissions = () => {
                     <input
                       type="checkbox"
                       checked={user.read_access}
-                      onChange={(e) => updatePermissions(user.id, e.target.checked, user.write_access)}
+                      onChange={(e) => updatePermissions(user.id, {
+                        readAccess: e.target.checked,
+                        writeAccess: user.write_access
+                      })}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      disabled={saving === user.id}
                     />
                   </label>
                 </td>
@@ -155,8 +196,12 @@ const UpdateUserPermissions = () => {
                     <input
                       type="checkbox"
                       checked={user.write_access}
-                      onChange={(e) => updatePermissions(user.id, user.read_access, e.target.checked)}
+                      onChange={(e) => updatePermissions(user.id, {
+                        readAccess: user.read_access,
+                        writeAccess: e.target.checked
+                      })}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      disabled={saving === user.id}
                     />
                   </label>
                 </td>

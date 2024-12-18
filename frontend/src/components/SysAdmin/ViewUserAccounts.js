@@ -36,12 +36,23 @@ const ViewUserAccounts = ({ selectedType }) => {
       }
       
       const data = await response.json();
-      if (!Array.isArray(data.users)) {
-        throw new Error('Invalid data format received from server');
-      }
+      // Handle different possible response structures
+      const usersList = Array.isArray(data.users) ? data.users : 
+                       Array.isArray(data.data) ? data.data :
+                       Array.isArray(data) ? data : [];
       
-      setUsers(data.users);
+      // Validate user objects and ensure required properties exist
+      const validUsers = usersList.filter(user => 
+        user && 
+        typeof user === 'object' && 
+        user.id !== undefined &&
+        user.username !== undefined &&
+        user.subscription_status !== undefined
+      );
+      
+      setUsers(validUsers);
     } catch (err) {
+      console.error('Error fetching users:', err);
       setError(err.message);
       setUsers([]);
     } finally {
@@ -60,24 +71,10 @@ const ViewUserAccounts = ({ selectedType }) => {
     }
   }, [error]);
 
-  const handleSelectAll = (event) => {
-    if (event.target.checked) {
-      setSelectedUsers(filteredUsers.map(user => user.id));
-    } else {
-      setSelectedUsers([]);
-    }
-  };
-
-  const handleSelectUser = (userId) => {
-    setSelectedUsers(prev => {
-      if (prev.includes(userId)) {
-        return prev.filter(id => id !== userId);
-      }
-      return [...prev, userId];
-    });
-  };
-
+  // Add validation to handle null/undefined users
   const filteredUsers = users.filter(user => {
+    if (!user || !user.id || !user.subscription_status) return false;
+    
     if (selectedType === 'premium') {
       return user.subscription_status === 'premium';
     } else if (selectedType === 'normal') {
@@ -86,12 +83,37 @@ const ViewUserAccounts = ({ selectedType }) => {
     return true;
   });
 
+  const handleSelectAll = (event) => {
+    if (event.target.checked && filteredUsers.length > 0) {
+      // Only select users with valid IDs
+      const validUserIds = filteredUsers
+        .filter(user => user && user.id)
+        .map(user => user.id);
+      setSelectedUsers(validUserIds);
+    } else {
+      setSelectedUsers([]);
+    }
+  };
+
+  const handleSelectUser = (userId) => {
+    if (!userId) return;
+
+    setSelectedUsers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      }
+      return [...prev, userId];
+    });
+  };
+
   const handleDeleteClick = (user) => {
+    if (!user || !user.id) return;
     setUserToDelete(user);
     setIsDeleteModalOpen(true);
   };
 
   const handleDeleteSuccess = (deletedUserId) => {
+    if (!deletedUserId) return;
     setUsers(prevUsers => prevUsers.filter(user => user.id !== deletedUserId));
     setSelectedUsers(prevSelected => 
       prevSelected.filter(id => id !== deletedUserId)
@@ -99,17 +121,21 @@ const ViewUserAccounts = ({ selectedType }) => {
   };
 
   const handleViewClick = (user) => {
+    if (!user || !user.id) return;
     setUserToView(user.id);
     setIsViewModalOpen(true);
   };
 
   const handleUpdateClick = (user) => {
+    if (!user || !user.id) return;
     setUserToUpdate(user.id);
     setCurrentUserToUpdate(user);
     setIsUpdateModalOpen(true);
   };
 
   const handleUpdateSuccess = (updatedUser) => {
+    if (!updatedUser || !updatedUser.id) return;
+    
     setUsers(prevUsers => 
       prevUsers.map(user => 
         user.id === updatedUser.id ? { ...user, ...updatedUser } : user
@@ -120,58 +146,66 @@ const ViewUserAccounts = ({ selectedType }) => {
     setCurrentUserToUpdate(null);
   };
 
-  const ActionMenu = ({ user }) => (
-    <div className="relative">
-      <button 
-        onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)}
-        className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
-        aria-haspopup="true"
-        aria-expanded={activeMenu === user.id}
-      >
-        <MoreVertical size={16} />
-      </button>
-      
-      {activeMenu === user.id && (
-        <div 
-          className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 border"
-          onBlur={() => setActiveMenu(null)}
+  const ActionMenu = ({ user }) => {
+    if (!user || !user.id) return null;
+
+    return (
+      <div className="relative">
+        <button 
+          onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)}
+          className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
+          aria-haspopup="true"
+          aria-expanded={activeMenu === user.id}
         >
-          <div className="py-1">
-            <button 
-              onClick={() => {
-                handleViewClick(user);
-                setActiveMenu(null);
-              }}
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-            >
-              View
-            </button>
-            <button 
-              onClick={() => {
-                handleUpdateClick(user);
-                setActiveMenu(null);
-              }}
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-            >
-              Update
-            </button>
-            <button 
-              onClick={() => {
-                handleDeleteClick(user);
-                setActiveMenu(null);
-              }}
-              className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
-            >
-              Delete
-            </button>
+          <MoreVertical size={16} />
+        </button>
+        
+        {activeMenu === user.id && (
+          <div 
+            className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 border"
+            onBlur={() => setActiveMenu(null)}
+          >
+            <div className="py-1">
+              <button 
+                onClick={() => {
+                  handleViewClick(user);
+                  setActiveMenu(null);
+                }}
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+              >
+                View
+              </button>
+              <button 
+                onClick={() => {
+                  handleUpdateClick(user);
+                  setActiveMenu(null);
+                }}
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+              >
+                Update
+              </button>
+              <button 
+                onClick={() => {
+                  handleDeleteClick(user);
+                  setActiveMenu(null);
+                }}
+                className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   ActionMenu.propTypes = {
-    user: PropTypes.object.isRequired,
+    user: PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      username: PropTypes.string.isRequired,
+      subscription_status: PropTypes.string.isRequired,
+    }).isRequired,
   };
 
   if (loading) {
@@ -183,16 +217,9 @@ const ViewUserAccounts = ({ selectedType }) => {
     );
   }
 
-  // Dynamically set the header <h2> based on selectedType
-  let headerText = 'Users';  // Default text
-
-  if (selectedType === 'all') {
-    headerText = 'All Users';
-  } else if (selectedType === 'premium') {
-    headerText = 'Premium End Users';
-  } else if (selectedType === 'normal') {
-    headerText = 'End Users';
-  }
+  const headerText = selectedType === 'all' ? 'All Users' :
+                    selectedType === 'premium' ? 'Premium End Users' :
+                    selectedType === 'normal' ? 'End Users' : 'Users';
 
   return (
     <>
@@ -230,32 +257,36 @@ const ViewUserAccounts = ({ selectedType }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredUsers.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedUsers.includes(user.id)}
-                        onChange={() => handleSelectUser(user.id)}
-                        className="rounded border-gray-300"
-                        aria-label={`Select user ${user.username}`}
-                      />
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{user.id}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {user.username}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {user.subscription_status === 'premium' ? 'Premium' : 'Normal'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <ActionMenu user={user} />
-                    </td>
-                  </tr>
-                ))}
+                {filteredUsers.map(user => {
+                  if (!user || !user.id) return null;
+                  
+                  return (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => handleSelectUser(user.id)}
+                          className="rounded border-gray-300"
+                          aria-label={`Select user ${user.username || ''}`}
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{user.id}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {user.username || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {user.subscription_status === 'premium' ? 'Premium' : 'Normal'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <ActionMenu user={user} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 

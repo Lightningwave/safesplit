@@ -16,14 +16,15 @@ export const loginSuperAdmin = async (email, password) => {
             throw new Error(data.error || 'Authentication failed');
         }
 
-        if (data.user.role !== 'super_admin') {
+        if (data.data.user.role !== 'super_admin') {
             throw new Error('Invalid super admin credentials');
         }
 
         localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        localStorage.setItem('billing', JSON.stringify(data.data.billing_profile));
         
-        return data;
+        return data.data;
     } catch (error) {
         console.error('Super admin login error:', error);
         throw error;
@@ -47,14 +48,17 @@ export const login = async (email, password) => {
         }
 
         // Prevent super admin login through regular login
-        if (data.user.role === 'super_admin') {
+        if (data.data.user.role === 'super_admin') {
             throw new Error('Please use super admin login page');
         }
 
         localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        if (data.data.billing_profile) {
+            localStorage.setItem('billing', JSON.stringify(data.data.billing_profile));
+        }
         
-        return data;
+        return data.data;
     } catch (error) {
         console.error('Login error:', error);
         throw error;
@@ -87,10 +91,14 @@ export const register = async (username, email, password) => {
         throw error;
     }
 };
-
+export const getCurrentBilling = () => {
+    const billing = localStorage.getItem('billing');
+    return billing ? JSON.parse(billing) : null;
+};
 export const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('billing');
 };
 
 export const getCurrentUser = () => {

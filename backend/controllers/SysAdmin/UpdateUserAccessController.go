@@ -51,7 +51,8 @@ func (c *UpdateAccountController) UpdateAccount(ctx *gin.Context) {
 		return
 	}
 
-	updates := &models.User{
+	// Create user update object
+	userUpdate := &models.User{
 		Username:           req.Username,
 		Email:              req.Email,
 		SubscriptionStatus: req.AccountType,
@@ -59,20 +60,23 @@ func (c *UpdateAccountController) UpdateAccount(ctx *gin.Context) {
 		WriteAccess:        req.WriteAccess,
 	}
 
-	if err := c.userModel.UpdateUserAccount(sysAdmin, uint(userID), updates); err != nil {
+	// Update user account
+	if err := c.userModel.UpdateUserAccount(sysAdmin, uint(userID), userUpdate); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Fetch updated user to return in response
+	// Get updated user information
 	updatedUser, err := c.userModel.FindByID(uint(userID))
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve updated user"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve updated information"})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "account updated successfully",
-		"user":    updatedUser,
+		"data": gin.H{
+			"user": updatedUser,
+		},
 	})
 }
