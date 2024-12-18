@@ -3,30 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { login, getDashboardByRole } from '../../services/authService';
 
 function LoginForm({ onLogin }) {
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        email: '',
-        password: ''
-    });
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+      email: '',
+      password: ''
+  });
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setError('');
+  const handleSubmit = async (e) => {
+      e.preventDefault();
+      setIsLoading(true);
+      setError('');
 
-        try {
-            const data = await login(formData.email, formData.password);
-            onLogin(data.user);
-            const dashboardRoute = getDashboardByRole(data.user.role);
-            navigate(dashboardRoute);
-        } catch (err) {
-            setError(err.message || 'Login failed');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      try {
+          const data = await login(formData.email, formData.password);
+          onLogin(data.user); // Or pass the whole data object if needed
+          const dashboardRoute = getDashboardByRole(data.user.role);
+          navigate(dashboardRoute);
+      } catch (err) {
+          setError(err.message || 'Login failed');
+      } finally {
+          setIsLoading(false);
+      }
+  };
 
     return (
         <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded shadow">

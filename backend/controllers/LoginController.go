@@ -6,14 +6,24 @@ import (
 	"safesplit/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type LoginController struct {
-	userModel *models.UserModel
+	userModel    *models.UserModel
+	billingModel *models.BillingModel
 }
 
-func NewLoginController(userModel *models.UserModel) *LoginController {
-	return &LoginController{userModel: userModel}
+func NewLoginController(userModel *models.UserModel, billingModel *models.BillingModel) *LoginController {
+	return &LoginController{
+		userModel:    userModel,
+		billingModel: billingModel,
+	}
+}
+
+type UserResponse struct {
+	User           *models.User           `json:"user"`
+	BillingProfile *models.BillingProfile `json:"billing_profile,omitempty"`
 }
 
 func (c *LoginController) Login(ctx *gin.Context) {
@@ -44,9 +54,21 @@ func (c *LoginController) Login(ctx *gin.Context) {
 	// Clear sensitive data
 	user.Password = ""
 
+	// Get billing profile if it exists
+	billingProfile, err := c.billingModel.GetUserBillingProfile(user.ID)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching billing details"})
+		return
+	}
+
+	response := UserResponse{
+		User:           user,
+		BillingProfile: billingProfile,
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"token": token,
-		"user":  user,
+		"data":  response,
 	})
 }
 
@@ -59,9 +81,23 @@ func (c *LoginController) GetMe(ctx *gin.Context) {
 		return
 	}
 
-	user.Password = "" // Clear sensitive data
+	// Clear sensitive data
+	user.Password = ""
+
+	// Get billing profile if it exists
+	billingProfile, err := c.billingModel.GetUserBillingProfile(userID)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching billing details"})
+		return
+	}
+
+	response := UserResponse{
+		User:           user,
+		BillingProfile: billingProfile,
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"user": user,
+		"data": response,
 		"role": user.Role, // Explicitly include role in response
 	})
 }

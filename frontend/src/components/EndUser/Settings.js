@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PasswordReset from './PasswordReset';
 
 const Settings = ({ user }) => {
     const [activeTab, setActiveTab] = useState('account');
@@ -47,43 +48,18 @@ const Settings = ({ user }) => {
             {activeTab === 'account' && (
                 <div>
                     <h2 className="text-xl font-semibold mb-4">Account Details</h2>
-                    <p><strong>Name:</strong> {user.name}</p>
+                    <p><strong>Username:</strong> {user.username}</p>
                     <p><strong>Email:</strong> {user.email}</p>
-                    <p><strong>Joined:</strong> {user.joinedDate}</p>
-                    {/* Add more user account detail fields as needed */}
+                    <p><strong>Account Type:</strong> {user.subscription_status === 'premium' ? 'Premium' : 'Free'}</p>
+                    <p><strong>Created:</strong> {new Date(user.created_at).toLocaleDateString()}</p>
                 </div>
             )}
 
-            {activeTab === 'password' && (
-                <div>
-                    <h2 className="text-xl font-semibold mb-4">Change Password</h2>
-                    <form className="space-y-4 max-w-sm">
-                        <div>
-                            <label className="block mb-1 font-medium">Current Password</label>
-                            <input type="password" className="w-full border rounded px-3 py-2" />
-                        </div>
-                        <div>
-                            <label className="block mb-1 font-medium">New Password</label>
-                            <input type="password" className="w-full border rounded px-3 py-2" />
-                        </div>
-                        <div>
-                            <label className="block mb-1 font-medium">Confirm New Password</label>
-                            <input type="password" className="w-full border rounded px-3 py-2" />
-                        </div>
-                        <button 
-                            type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                            Update Password
-                        </button>
-                    </form>
-                </div>
-            )}
+            {activeTab === 'password' && <PasswordReset />}
 
             {activeTab === '2fa' && (
                 <div>
                     <h2 className="text-xl font-semibold mb-4">Setup Two-Factor Authentication</h2>
-                    {/* Instructions or QR code for 2FA setup */}
                     <p className="mb-4">Enable Two-Factor Authentication for increased account security.</p>
                     <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
                         Enable 2FA

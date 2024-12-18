@@ -9,47 +9,109 @@ import (
 )
 
 type CreateAccountController struct {
-	userModel *models.UserModel
+	userModel            *models.UserModel
+	passwordHistoryModel *models.PasswordHistoryModel
 }
 
-func NewCreateAccountController(userModel *models.UserModel) *CreateAccountController {
+func NewCreateAccountController(userModel *models.UserModel, passwordHistoryModel *models.PasswordHistoryModel) *CreateAccountController {
 	return &CreateAccountController{
-		userModel: userModel,
+		userModel:            userModel,
+		passwordHistoryModel: passwordHistoryModel,
 	}
+}
+
+type CreateAccountRequest struct {
+	Username string `json:"username" binding:"required,min=3"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
+type CreateAccountResponse struct {
+	User    *models.User `json:"user"`
+	Message string       `json:"message"`
 }
 
 // CreateAccount handles user registration
 func (c *CreateAccountController) CreateAccount(ctx *gin.Context) {
-	var user models.User
-	if err := ctx.ShouldBindJSON(&user); err != nil {
+	var req CreateAccountRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Validate user input before creating the user
-	if err := c.validateUserInput(&user); err != nil {
+	// Validate user input
+	if err := c.validateUserInput(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Create the user in the database using the UserModel
-	createdUser, err := c.userModel.Create(&user)
+	// Create user object
+	user := &models.User{
+		Username:           req.Username,
+		Email:              req.Email,
+		Password:           req.Password,
+		Role:               models.RoleEndUser,
+		SubscriptionStatus: models.SubscriptionStatusFree,
+		StorageQuota:       models.DefaultStorageQuota,
+	}
+
+	// Create the user in the database
+	createdUser, err := c.userModel.Create(user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Clear sensitive data before sending the response
+	// Clear sensitive data
 	createdUser.Password = ""
-	ctx.JSON(http.StatusCreated, createdUser)
+
+	response := CreateAccountResponse{
+		User:    createdUser,
+		Message: "Account created successfully",
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"data": response,
+	})
 }
 
 // validateUserInput contains business logic for validating user input
-func (c *CreateAccountController) validateUserInput(user *models.User) error {
-	// Example validation logic
-	if len(user.Password) < 8 {
+func (c *CreateAccountController) validateUserInput(req *CreateAccountRequest) error {
+	// Password complexity requirements
+	if len(req.Password) < 8 {
 		return errors.New("password must be at least 8 characters long")
 	}
-	// Add more validation as needed
+
+	// Check for at least one uppercase letter
+	hasUpper := false
+	hasLower := false
+	hasNumber := false
+	for _, char := range req.Password {
+		if char >= 'A' && char <= 'Z' {
+			hasUpper = true
+		}
+		if char >= 'a' && char <= 'z' {
+			hasLower = true
+		}
+		if char >= '0' && char <= '9' {
+			hasNumber = true
+		}
+	}
+
+	if !hasUpper {
+		return errors.New("password must contain at least one uppercase letter")
+	}
+	if !hasLower {
+		return errors.New("password must contain at least one lowercase letter")
+	}
+	if !hasNumber {
+		return errors.New("password must contain at least one number")
+	}
+
+	// Username requirements
+	if len(req.Username) < 3 {
+		return errors.New("username must be at least 3 characters long")
+	}
+
 	return nil
 }

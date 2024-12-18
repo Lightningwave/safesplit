@@ -25,12 +25,6 @@ const (
 	RoleSuperAdmin  = "super_admin"
 )
 
-// Define Subscription details
-type UserSubscriptionDetails struct {
-	Status          string
-	PaymentMethod   string
-	NextInvoiceDate string
-}
 type StorageStats struct {
 	TotalUsers  int64                `json:"total_users"`
 	ActiveUsers int64                `json:"active_users"`
@@ -53,30 +47,26 @@ const DefaultStorageQuota = int64(5 * 1024 * 1024 * 1024)
 const PremiumStorageQuota = int64(50 * 1024 * 1024 * 1024)
 
 type User struct {
-	ID                 uint       `json:"id" gorm:"primaryKey"`
-	Username           string     `json:"username" gorm:"unique;not null"`
-	Email              string     `json:"email" gorm:"unique;not null"`
-	Password           string     `json:"-" gorm:"not null"`
-	Role               string     `json:"role" gorm:"type:enum('end_user','premium_user','sys_admin','super_admin');default:'end_user'"`
-	ReadAccess         bool       `json:"read_access" gorm:"default:true"`
-	WriteAccess        bool       `json:"write_access" gorm:"default:true"`
-	TwoFactorEnabled   bool       `json:"two_factor_enabled" gorm:"default:false"`
-	TwoFactorSecret    string     `json:"-" gorm:"column:two_factor_secret"`
-	StorageQuota       int64      `json:"storage_quota" gorm:"default:5368709120"`
-	StorageUsed        int64      `json:"storage_used" gorm:"default:0"`
-	SubscriptionStatus string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
-	IsActive           bool       `json:"is_active" gorm:"default:true"`
-	LastLogin          *time.Time `json:"last_login"`
-
-	// Payment and Billing Information
-	PaymentMethod   string     `json:"payment_method" gorm:"type:varchar(50);default:'none'"`
-	BillingCycle    string     `json:"billing_cycle" gorm:"type:enum('monthly','yearly');default:'monthly'"`
-	NextBillingDate *time.Time `json:"next_billing_date"`
-	LastBillingDate *time.Time `json:"last_billing_date"`
-	BillingStatus   string     `json:"billing_status" gorm:"type:enum('active','pending','failed','cancelled');default:'pending'"`
-	CustomerID      string     `json:"customer_id,omitempty" gorm:"type:varchar(255)"`
-	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                  uint       `json:"id" gorm:"primaryKey"`
+	Username            string     `json:"username" gorm:"unique;not null"`
+	Email               string     `json:"email" gorm:"unique;not null"`
+	Password            string     `json:"-" gorm:"not null"`
+	Role                string     `json:"role" gorm:"type:enum('end_user','premium_user','sys_admin','super_admin');default:'end_user'"`
+	ReadAccess          bool       `json:"read_access" gorm:"default:true"`
+	WriteAccess         bool       `json:"write_access" gorm:"default:true"`
+	TwoFactorEnabled    bool       `json:"two_factor_enabled" gorm:"default:false"`
+	TwoFactorSecret     string     `json:"-" gorm:"column:two_factor_secret"`
+	StorageQuota        int64      `json:"storage_quota" gorm:"default:5368709120"`
+	StorageUsed         int64      `json:"storage_used" gorm:"default:0"`
+	SubscriptionStatus  string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
+	IsActive            bool       `json:"is_active" gorm:"default:true"`
+	LastLogin           *time.Time `json:"last_login"`
+	LastPasswordChange  time.Time  `json:"last_password_change" gorm:"autoCreateTime"`
+	FailedLoginAttempts int        `json:"failed_login_attempts" gorm:"default:0"`
+	AccountLockedUntil  *time.Time `json:"account_locked_until"`
+	ForcePasswordChange bool       `json:"force_password_change" gorm:"default:false"`
+	CreatedAt           time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt           time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 type UserModel struct {
@@ -117,32 +107,75 @@ func (m *UserModel) Authenticate(email, password string) (*User, error) {
 		return nil, errors.New("please use super admin login portal")
 	}
 
+	// Check if account is locked
+	if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
+		return nil, fmt.Errorf("account locked until %v", user.AccountLockedUntil)
+	}
+
+	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		if err := m.handleFailedLogin(&user); err != nil {
+			return nil, err
+		}
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Update last login time
+	// Reset failed attempts and update login time
+	return m.handleSuccessfulLogin(&user)
+}
+
+// handleSuccessfulLogin updates user state after successful login
+func (m *UserModel) handleSuccessfulLogin(user *User) (*User, error) {
+	user.FailedLoginAttempts = 0
+	user.AccountLockedUntil = nil
 	now := time.Now()
 	user.LastLogin = &now
-	if err := m.db.Save(&user).Error; err != nil {
+
+	if err := m.db.Save(user).Error; err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
+}
+
+// handleFailedLogin manages failed login attempts and account lockout
+func (m *UserModel) handleFailedLogin(user *User) error {
+	user.FailedLoginAttempts++
+
+	if user.FailedLoginAttempts >= 5 {
+		lockTime := time.Now().Add(30 * time.Minute)
+		user.AccountLockedUntil = &lockTime
+	}
+
+	return m.db.Save(user).Error
 }
 func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error) {
 	var user User
-	if err := m.db.Where("email = ? AND is_active = ? AND role = ?", email, true, RoleSuperAdmin).First(&user).Error; err != nil {
+	if err := m.db.Where("email = ? AND is_active = ? AND role = ?",
+		email, true, RoleSuperAdmin).First(&user).Error; err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
+	// Check if account is locked
+	if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
+		return nil, fmt.Errorf("account locked until %v", user.AccountLockedUntil)
+	}
+
+	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		// Increment failed attempts and possibly lock account
+		if err := m.handleFailedLogin(&user); err != nil {
+			return nil, err
+		}
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Update last login time
+	// Reset failed attempts on successful login
+	user.FailedLoginAttempts = 0
+	user.AccountLockedUntil = nil
 	now := time.Now()
 	user.LastLogin = &now
+
 	if err := m.db.Save(&user).Error; err != nil {
 		return nil, err
 	}
@@ -221,13 +254,38 @@ func (u *User) ReactivateAccount(db *gorm.DB) error {
 }
 
 // ChangePassword updates the user's password
-func (u *User) ChangePassword(db *gorm.DB, newPassword string) error {
+func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword string, passwordHistoryModel *PasswordHistoryModel) error {
+	var user User
+	if err := m.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	// Generate new password hash
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	u.Password = string(hashedPassword)
-	return db.Save(u).Error
+
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		// Store the old password in history if it exists
+		if user.Password != "" {
+			if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+				return err
+			}
+		}
+
+		// Update the user's password
+		user.Password = string(hashedPassword)
+		user.LastPasswordChange = time.Now()
+		user.ForcePasswordChange = false
+
+		return tx.Save(&user).Error
+	})
 }
 
 // Create Sys admin account
@@ -365,8 +423,8 @@ func (m *UserModel) GetStorageStats() (*StorageStats, error) {
 	var stats StorageStats
 	var users []User
 
-	// Get all users with their storage information
-	if err := m.db.Find(&users).Error; err != nil {
+	// Get all users excluding admins
+	if err := m.db.Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("error fetching users: %v", err)
 	}
 
@@ -376,41 +434,20 @@ func (m *UserModel) GetStorageStats() (*StorageStats, error) {
 		stats.TotalUsers++
 		if user.IsActive {
 			stats.ActiveUsers++
-		}
-		stats.StorageUsed += user.StorageUsed
+			stats.StorageUsed += user.StorageUsed
 
-		userDetails = append(userDetails, UserStorageDetails{
-			ID:                 strconv.FormatUint(uint64(user.ID), 10),
-			Username:           user.Username,
-			SubscriptionStatus: user.SubscriptionStatus,
-			StorageUsed:        user.StorageUsed,
-			StorageTotal:       user.StorageQuota,
-		})
+			userDetails = append(userDetails, UserStorageDetails{
+				ID:                 strconv.FormatUint(uint64(user.ID), 10),
+				Username:           user.Username,
+				SubscriptionStatus: user.SubscriptionStatus,
+				StorageUsed:        user.StorageUsed,
+				StorageTotal:       user.StorageQuota,
+			})
+		}
 	}
 
 	stats.Users = userDetails
 	return &stats, nil
-}
-
-// GetSubscriptionDetails retrieves subscription and billing information
-func (m *UserModel) GetSubscriptionDetails(sysAdmin *User) ([]map[string]interface{}, error) {
-	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
-		return nil, errors.New("unauthorized: only administrators can view subscription details")
-	}
-
-	var subscriptions []map[string]interface{}
-	err := m.db.Model(&User{}).
-		Select("subscription_status, COUNT(*) as count, "+
-			"SUM(storage_quota) as total_quota").
-		Where("role NOT IN ?", []string{RoleSysAdmin, RoleSuperAdmin}).
-		Group("subscription_status").
-		Scan(&subscriptions).Error
-
-	if err != nil {
-		return nil, fmt.Errorf("error fetching subscription details: %v", err)
-	}
-
-	return subscriptions, nil
 }
 
 // GetDeletedUsers retrieves all deleted user accounts
@@ -485,29 +522,6 @@ func (m *UserModel) UpdateUserAccount(sysAdmin *User, userID uint, updates *User
 	}
 
 	return nil
-}
-
-// Get User subscription details
-func (m *UserModel) GetUserSubscriptionDetails(sysAdmin *User, userID uint) (*UserSubscriptionDetails, error) {
-	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
-		return nil, errors.New("unauthorized: only administrators can view user subscription details")
-	}
-
-	var user User
-	if err := m.db.First(&user, userID).Error; err != nil {
-		return nil, errors.New("user not found")
-	}
-
-	nextInvoiceDate := ""
-	if user.NextBillingDate != nil {
-		nextInvoiceDate = user.NextBillingDate.Format("January 02, 2006")
-	}
-
-	return &UserSubscriptionDetails{
-		Status:          user.SubscriptionStatus,
-		PaymentMethod:   user.PaymentMethod,
-		NextInvoiceDate: nextInvoiceDate,
-	}, nil
 }
 
 func (m *UserModel) UpdateUserStorage(userID uint, size int64) error {

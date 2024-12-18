@@ -13,7 +13,9 @@ type LoginController struct {
 }
 
 func NewLoginController(userModel *models.UserModel) *LoginController {
-	return &LoginController{userModel: userModel}
+	return &LoginController{
+		userModel: userModel,
+	}
 }
 
 func (c *LoginController) Login(ctx *gin.Context) {
@@ -46,7 +48,9 @@ func (c *LoginController) Login(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"token": token,
-		"user":  user,
+		"data": gin.H{
+			"user": user,
+		},
 	})
 }
 
@@ -67,7 +71,9 @@ func (c *LoginController) GetMe(ctx *gin.Context) {
 
 	user.Password = "" // Clear sensitive data
 	ctx.JSON(http.StatusOK, gin.H{
-		"user": user,
+		"data": gin.H{
+			"user": user,
+		},
 		"role": user.Role,
 	})
 }

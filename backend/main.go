@@ -22,6 +22,8 @@ func main() {
 
 	// Initialize all required models
 	userModel := models.NewUserModel(db)
+	passwordHistoryModel := models.NewPasswordHistoryModel(db)
+	billingModel := models.NewBillingModel(db, userModel)
 	activityLogModel := models.NewActivityLogModel(db)
 	fileModel := models.NewFileModel(db)
 	fileShareModel := models.NewFileShareModel(db)
@@ -43,6 +45,8 @@ func main() {
 	handlers := routes.NewRouteHandlers(
 		db,
 		userModel,
+		billingModel,
+		passwordHistoryModel,
 		activityLogModel,
 		fileModel,
 		folderModel,

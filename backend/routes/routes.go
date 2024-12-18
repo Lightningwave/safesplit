@@ -3,6 +3,7 @@ package routes
 import (
 	"safesplit/controllers"
 	"safesplit/controllers/EndUser"
+	"safesplit/controllers/PremiumUser"
 	"safesplit/controllers/SuperAdmin"
 	"safesplit/controllers/SysAdmin"
 	"safesplit/middleware"
@@ -20,18 +21,23 @@ type RouteHandlers struct {
 	SuperAdminHandlers        *SuperAdminHandlers
 	SysAdminHandlers          *SysAdminHandlers
 	EndUserHandlers           *EndUserHandlers
+	PremiumUserHandlers       *PremiumUserHandlers
 }
 
 type EndUserHandlers struct {
-	UploadFileController   *EndUser.UploadFileController
-	ViewFilesController    *EndUser.ViewFilesController
-	DownloadFileController *EndUser.DownloadFileController
-	DeleteFileController   *EndUser.DeleteFileController
-	ArchiveFileController  *EndUser.ArchiveFileController
-	ShareFileController    *EndUser.ShareFileController
-	CreateFolderController *EndUser.CreateFolderController
-	ViewFolderController   *EndUser.ViewFolderController
-	DeleteFolderController *EndUser.DeleteFolderController
+	UploadFileController    *EndUser.UploadFileController
+	ViewFilesController     *EndUser.ViewFilesController
+	DownloadFileController  *EndUser.DownloadFileController
+	DeleteFileController    *EndUser.DeleteFileController
+	ArchiveFileController   *EndUser.ArchiveFileController
+	ShareFileController     *EndUser.ShareFileController
+	CreateFolderController  *EndUser.CreateFolderController
+	ViewFolderController    *EndUser.ViewFolderController
+	DeleteFolderController  *EndUser.DeleteFolderController
+	PasswordResetController *EndUser.PasswordResetController
+}
+type PremiumUserHandlers struct {
+	FragmentController *PremiumUser.FragmentController
 }
 
 type SuperAdminHandlers struct {
@@ -54,6 +60,8 @@ type SysAdminHandlers struct {
 func NewRouteHandlers(
 	db *gorm.DB,
 	userModel *models.UserModel,
+	billingModel *models.BillingModel,
+	passwordHistoryModel *models.PasswordHistoryModel,
 	activityLogModel *models.ActivityLogModel,
 	fileModel *models.FileModel,
 	folderModel *models.FolderModel,
@@ -65,9 +73,9 @@ func NewRouteHandlers(
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
-		LoginController:           controllers.NewLoginController(userModel),
+		LoginController:           controllers.NewLoginController(userModel, billingModel),
 		SuperAdminLoginController: superAdminLoginController,
-		CreateAccountController:   controllers.NewCreateAccountController(userModel),
+		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
 		SuperAdminHandlers: &SuperAdminHandlers{
 			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
@@ -81,18 +89,22 @@ func NewRouteHandlers(
 			ViewUserAccountController:        SysAdmin.NewViewUserAccountController(userModel),
 			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
-			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
+			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:   EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel),
-			ViewFilesController:    EndUser.NewViewFilesController(fileModel, folderModel),
-			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
-			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
-			ArchiveFileController:  EndUser.NewArchiveFileController(fileModel),
-			ShareFileController:    EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
-			CreateFolderController: EndUser.NewCreateFolderController(folderModel, activityLogModel),
-			ViewFolderController:   EndUser.NewViewFolderController(folderModel, fileModel),
-			DeleteFolderController: EndUser.NewDeleteFolderController(folderModel, activityLogModel),
+			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel),
+			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
+			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
+			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
+			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
+			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
+			CreateFolderController:  EndUser.NewCreateFolderController(folderModel, activityLogModel),
+			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
+			DeleteFolderController:  EndUser.NewDeleteFolderController(folderModel, activityLogModel),
+			PasswordResetController: EndUser.NewPasswordResetController(userModel, passwordHistoryModel),
+		},
+		PremiumUserHandlers: &PremiumUserHandlers{
+			FragmentController: PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 		},
 	}
 }
@@ -124,6 +136,11 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	// End User routes should be first as they're most commonly accessed
 	setupEndUserRoutes(protected, handlers.EndUserHandlers)
 
+	// Premium User routes
+	premium := protected.Group("/premium")
+	premium.Use(middleware.PremiumUserMiddleware())
+	setupPremiumUserRoutes(premium, handlers.PremiumUserHandlers)
+
 	// Admin routes with their respective middleware
 	superAdmin := protected.Group("/admin")
 	superAdmin.Use(middleware.SuperAdminMiddleware())
@@ -135,6 +152,7 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 }
 
 func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
+	protected.PUT("/reset-password", handlers.PasswordResetController.ResetPassword)
 	// Existing files routes
 	files := protected.Group("/files")
 	{
@@ -153,6 +171,13 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		folders.GET("/:id", handlers.ViewFolderController.GetFolderContents) // Get folder contents
 		folders.POST("", handlers.CreateFolderController.Create)             // Create new folder
 		folders.DELETE("/:id", handlers.DeleteFolderController.Delete)       // Delete folder
+	}
+}
+func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
+	// Fragment management routes
+	fragments := premium.Group("/fragments")
+	{
+		fragments.GET("/files/:fileId", handlers.FragmentController.GetUserFragments)
 	}
 }
 

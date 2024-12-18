@@ -8,31 +8,53 @@ USE safesplit;
 -- Note: Handles both basic user data and premium features
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,         -- Unique username for login
-    email VARCHAR(255) UNIQUE NOT NULL,            -- Unique email for notifications and recovery
-    password VARCHAR(255) NOT NULL,                -- Hashed password
-    role ENUM('end_user', 'premium_user', 'sys_admin', 'super_admin') NOT NULL DEFAULT 'end_user',  -- User access level
-    read_access BOOLEAN NOT NULL DEFAULT TRUE,     -- User's read permission status
-    write_access BOOLEAN NOT NULL DEFAULT TRUE,    -- User's write permission status
-    two_factor_enabled BOOLEAN DEFAULT FALSE,      -- Whether 2FA is enabled
-    two_factor_secret VARCHAR(255),                -- Secret key for 2FA if enabled
-    storage_quota BIGINT DEFAULT 5368709120,       -- Storage limit (5GB for free users, 50GB for premium)
-    storage_used BIGINT DEFAULT 0,                 -- Current storage usage in bytes
-    subscription_status ENUM('free', 'premium', 'cancelled') DEFAULT 'free',  -- Current subscription level
-    is_active BOOLEAN DEFAULT TRUE,                -- Whether account is active
-    last_login TIMESTAMP NULL,                     -- Last successful login timestamp
+    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('end_user', 'premium_user', 'sys_admin', 'super_admin') NOT NULL DEFAULT 'end_user',
+    read_access BOOLEAN NOT NULL DEFAULT TRUE,
+    write_access BOOLEAN NOT NULL DEFAULT TRUE,
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret VARCHAR(255),
+    storage_quota BIGINT DEFAULT 5368709120,
+    storage_used BIGINT DEFAULT 0,
+    subscription_status ENUM('free', 'premium', 'cancelled') DEFAULT 'free',
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP NULL,
+    last_password_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    failed_login_attempts INT DEFAULT 0,
+    account_locked_until TIMESTAMP NULL,
+    force_password_change BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE password_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+-- Billing profiles table for payment information
+CREATE TABLE billing_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    customer_id VARCHAR(255) NOT NULL,           -- Payment processor's customer ID
+    billing_email VARCHAR(255),                  -- Can be different from user email
+    billing_name VARCHAR(255),                   -- Full name for billing
+    billing_address TEXT,                        -- Full billing address
+    country_code VARCHAR(2),                     -- ISO country code
+    default_payment_method ENUM('credit_card', 'bank_account', 'paypal') DEFAULT 'credit_card',
+    billing_cycle ENUM('monthly', 'yearly') DEFAULT 'monthly',
+    currency VARCHAR(3) DEFAULT 'USD',
+    next_billing_date TIMESTAMP NULL,
+    last_billing_date TIMESTAMP NULL,
+    billing_status ENUM('active', 'pending', 'failed', 'cancelled') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    -- Billing-related fields
-    payment_method VARCHAR(50) DEFAULT 'none',                     -- Payment method used by the user
-    billing_cycle ENUM('monthly', 'yearly') DEFAULT 'monthly',      -- Billing cycle preference
-    next_billing_date TIMESTAMP NULL,                               -- Next scheduled billing date
-    last_billing_date TIMESTAMP NULL,                               -- Last successful billing date
-    billing_status ENUM('active', 'pending', 'failed', 'cancelled') DEFAULT 'pending',  -- Current billing status
-    customer_id VARCHAR(255)                                        -- Identifier for the customer in the payment system
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_customer (customer_id)
 );
-
 
 -- Folders table
 -- Purpose: Manages hierarchical organization of files
