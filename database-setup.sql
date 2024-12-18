@@ -66,7 +66,7 @@ CREATE TABLE files (
     mime_type VARCHAR(127),                       -- File type for download handling
     is_archived BOOLEAN DEFAULT FALSE,            -- Whether file is archived
     is_deleted BOOLEAN DEFAULT FALSE,             -- Soft delete flag
-    is_shared BOOLEAN DEFAULT FALSE;
+    is_shared BOOLEAN DEFAULT FALSE,
     deleted_at TIMESTAMP NULL,                    -- When file was soft deleted
     encryption_iv BINARY(16),                     -- AES initialization vector
     encryption_salt BINARY(32),                   -- Salt for key derivation

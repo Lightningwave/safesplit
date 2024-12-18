@@ -137,12 +137,13 @@ const ViewFile = ({
     // Apply section filters
     if (selectedSection === 'Archives') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === true);
-    } else if (selectedSection === 'Shared Files') {  
-        filteredFiles = filteredFiles.filter(file => file.is_shared === true);
+    } else if (selectedSection === 'Shared Files') {
+        filteredFiles = filteredFiles.filter(file => 
+            file.is_shared === true && file.is_archived === false
+        );
     } else if (selectedSection !== 'Dashboard') {
         filteredFiles = filteredFiles.filter(file => file.is_archived === false);
     }
-    
     
 
     const showCheckboxes = !showRecentsOnly;
