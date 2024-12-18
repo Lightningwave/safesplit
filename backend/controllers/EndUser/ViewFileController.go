@@ -39,6 +39,7 @@ type FileResponse struct {
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count"`
 	Threshold        uint       `json:"threshold"`
+	IsShared         bool       `json:"is_shared"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	FolderName       string     `json:"folder_name"`
@@ -66,7 +67,6 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 	folderIDStr := ctx.Query("folder_id")
 	var files []models.File
 	var err error
-	var folderName string
 
 	if folderIDStr != "" {
 		// Get files from specific folder
@@ -88,15 +88,55 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 			})
 			return
 		}
-		folderName = folder.Name
 
 		files, err = c.fileModel.ListFolderFiles(currentUser.ID, uint(folderID))
-	} else {
-		// Get files from root
-		files, err = c.fileModel.ListRootFiles(currentUser.ID)
-		folderName = "Root"
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "Failed to retrieve folder files",
+			})
+			return
+		}
+
+		// Create responses with folder name
+		fileResponses := make([]FileResponse, len(files))
+		for i, file := range files {
+			fileResponses[i] = FileResponse{
+				ID:               file.ID,
+				UserID:           file.UserID,
+				FolderID:         file.FolderID,
+				Name:             file.Name,
+				OriginalName:     file.OriginalName,
+				FilePath:         file.FilePath,
+				Size:             file.Size,
+				CompressedSize:   file.CompressedSize,
+				IsCompressed:     file.IsCompressed,
+				CompressionRatio: file.CompressionRatio,
+				MimeType:         file.MimeType,
+				IsArchived:       file.IsArchived,
+				IsDeleted:        file.IsDeleted,
+				DeletedAt:        file.DeletedAt,
+				FileHash:         file.FileHash,
+				ShareCount:       file.ShareCount,
+				Threshold:        file.Threshold,
+				IsShared:         file.IsShared,
+				CreatedAt:        file.CreatedAt,
+				UpdatedAt:        file.UpdatedAt,
+				FolderName:       folder.Name,
+			}
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data": gin.H{
+				"files": fileResponses,
+			},
+		})
+		return
 	}
 
+	// Get all user files when no folder is specified
+	files, err = c.fileModel.ListAllUserFiles(currentUser.ID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
@@ -105,9 +145,17 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 		return
 	}
 
-	// Convert files to response format with folder names
+	// Create response with appropriate folder names
 	fileResponses := make([]FileResponse, len(files))
 	for i, file := range files {
+		folderName := "Root"
+		if file.FolderID != nil {
+			// Get folder information for each file
+			if folder, err := c.folderModel.GetFolderByID(*file.FolderID, currentUser.ID); err == nil {
+				folderName = folder.Name
+			}
+		}
+
 		fileResponses[i] = FileResponse{
 			ID:               file.ID,
 			UserID:           file.UserID,
@@ -126,6 +174,7 @@ func (c *ViewFilesController) ListUserFiles(ctx *gin.Context) {
 			FileHash:         file.FileHash,
 			ShareCount:       file.ShareCount,
 			Threshold:        file.Threshold,
+			IsShared:         file.IsShared,
 			CreatedAt:        file.CreatedAt,
 			UpdatedAt:        file.UpdatedAt,
 			FolderName:       folderName,

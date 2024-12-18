@@ -31,6 +31,7 @@ type File struct {
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
 	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
+	IsShared         bool       `json:"is_shared" gorm:"default:false"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
@@ -362,6 +363,16 @@ func (m *FileModel) ListFolderFiles(userID uint, folderID uint) ([]File, error) 
 		Find(&files).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch folder files: %w", err)
+	}
+	return files, nil
+}
+func (m *FileModel) ListAllUserFiles(userID uint) ([]File, error) {
+	var files []File
+	err := m.db.Where("user_id = ? AND is_deleted = ?", userID, false).
+		Order("created_at DESC").
+		Find(&files).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user files: %w", err)
 	}
 	return files, nil
 }

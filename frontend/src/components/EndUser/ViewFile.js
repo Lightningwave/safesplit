@@ -77,6 +77,7 @@ const ViewFile = ({
         switch (action) {
             case 'delete':
             case 'archive':
+            case 'share':
                 await fetchFiles();
                 break;
             default:
@@ -122,8 +123,10 @@ const ViewFile = ({
         }
     };
 
+    // Update the section filtering logic
     let filteredFiles = files;
 
+    // Apply search filter
     if (searchQuery) {
         filteredFiles = filteredFiles.filter(file => 
             (file.original_name || file.name)
@@ -132,11 +135,23 @@ const ViewFile = ({
         );
     }
 
-    if (selectedSection === 'Archives') {
-        filteredFiles = filteredFiles.filter(file => file.is_archived === true);
-    } else if (selectedSection !== 'Dashboard') {
-        filteredFiles = filteredFiles.filter(file => file.is_archived === false);
+    // Apply section filters
+    if (currentFolder) {
+        // When viewing a folder, show all non-deleted files regardless of archive status
+        filteredFiles = filteredFiles.filter(file => !file.is_deleted);
+    } else {
+        // Only apply archive/shared filters when not in a folder view
+        if (selectedSection === 'Archives') {
+            filteredFiles = filteredFiles.filter(file => file.is_archived === true);
+        } else if (selectedSection === 'Shared Files') {
+            filteredFiles = filteredFiles.filter(file => 
+                file.is_shared === true && file.is_archived === false
+            );
+        } else if (selectedSection !== 'Dashboard') {
+            filteredFiles = filteredFiles.filter(file => file.is_archived === false);
+        }
     }
+    
 
     const showCheckboxes = !showRecentsOnly;
     const showActions = !showRecentsOnly;
@@ -188,7 +203,10 @@ const ViewFile = ({
 
                     {filteredFiles.length === 0 ? (
                         <div className="text-gray-500 text-center p-8">
-                            No files found in {currentFolder ? `folder "${currentFolder.name}"` : 'this location'}
+                            {selectedSection === 'Shared Files' 
+                                ? "No shared files found"
+                                : `No files found in ${currentFolder ? `folder "${currentFolder.name}"` : 'this location'}`
+                            }
                         </div>
                     ) : (
                         filteredFiles.map(file => (
@@ -203,7 +221,9 @@ const ViewFile = ({
                                                 className="rounded"
                                             />
                                         )}
-                                        <File size={20} className="text-gray-400" />
+                                        <div className="flex items-center space-x-2">
+                                            <File size={20} className="text-gray-400" />
+                                        </div>
                                         <span className="truncate" title={file.original_name || file.name}>
                                             {file.original_name || file.name}
                                         </span>

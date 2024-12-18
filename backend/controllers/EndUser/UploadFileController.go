@@ -24,6 +24,7 @@ type UploadFileController struct {
 	shamirService      *services.ShamirService
 	keyFragmentModel   *models.KeyFragmentModel
 	compressionService *services.CompressionService
+	folderModel        *models.FolderModel
 }
 
 func NewFileController(
@@ -34,6 +35,7 @@ func NewFileController(
 	shamirService *services.ShamirService,
 	keyFragmentModel *models.KeyFragmentModel,
 	compressionService *services.CompressionService,
+	folderModel *models.FolderModel,
 ) *UploadFileController {
 	return &UploadFileController{
 		fileModel:          fileModel,
@@ -43,6 +45,7 @@ func NewFileController(
 		shamirService:      shamirService,
 		keyFragmentModel:   keyFragmentModel,
 		compressionService: compressionService,
+		folderModel:        folderModel,
 	}
 }
 
@@ -84,6 +87,37 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		}
 		parsedID := uint(id)
 		folderID = &parsedID
+	} else {
+		// Get user's root folders
+		folders, err := c.folderModel.GetUserFolders(currentUser.ID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to check folders"})
+			return
+		}
+
+		// Look for existing "My Files" folder
+		var myFilesID *uint
+		for _, folder := range folders {
+			if folder.Name == "My Files" {
+				myFilesID = &folder.ID
+				break
+			}
+		}
+
+		// Create "My Files" if it doesn't exist
+		if myFilesID == nil {
+			defaultFolder := &models.Folder{
+				UserID: currentUser.ID,
+				Name:   "My Files",
+			}
+			if err := c.folderModel.CreateFolder(defaultFolder); err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to create default folder"})
+				return
+			}
+			myFilesID = &defaultFolder.ID
+		}
+
+		folderID = myFilesID
 	}
 
 	nShares := ctx.PostForm("shares")
@@ -130,7 +164,7 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
 	fileRecord := &models.File{
 		UserID:           currentUser.ID,
-		FolderID:         folderID, // Add this line to set the folder ID
+		FolderID:         folderID,
 		Name:             encryptedFileName,
 		OriginalName:     fileHeader.Filename,
 		Size:             fileHeader.Size,

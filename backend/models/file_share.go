@@ -42,7 +42,7 @@ func generateShareLink() (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-func (m *FileShareModel) CreateFileShare(share *FileShare, password string) error {
+func (m *FileShareModel) CreateFileShareWithStatus(share *FileShare, password string) error {
 	// Generate password salt
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -67,9 +67,28 @@ func (m *FileShareModel) CreateFileShare(share *FileShare, password string) erro
 	}
 	share.ShareLink = shareLink
 
-	// Create share record
-	if err := m.db.Create(share).Error; err != nil {
+	// Start transaction
+	tx := m.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+
+	// Create share record within transaction
+	if err := tx.Create(share).Error; err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to create share record: %w", err)
+	}
+
+	// Update file's IsShared status
+	if err := tx.Model(&File{}).Where("id = ?", share.FileID).Update("is_shared", true).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update file status: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
