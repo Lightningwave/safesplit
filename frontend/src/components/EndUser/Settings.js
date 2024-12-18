@@ -50,8 +50,7 @@ const Settings = ({ user }) => {
                     <h2 className="text-xl font-semibold mb-4">Account Details</h2>
                     <p><strong>Username:</strong> {user.username}</p>
                     <p><strong>Email:</strong> {user.email}</p>
-                    <p><strong>Account Type:</strong> {user.subscription_status === 'premium' ? 'Premium' : 'Free'}</p>
-                    <p><strong>Created:</strong> {new Date(user.created_at).toLocaleDateString()}</p>
+
                 </div>
             )}
 
