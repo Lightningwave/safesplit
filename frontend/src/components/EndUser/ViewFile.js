@@ -123,6 +123,7 @@ const ViewFile = ({
         }
     };
 
+    // Update the section filtering logic
     let filteredFiles = files;
 
     // Apply search filter
@@ -135,14 +136,20 @@ const ViewFile = ({
     }
 
     // Apply section filters
-    if (selectedSection === 'Archives') {
-        filteredFiles = filteredFiles.filter(file => file.is_archived === true);
-    } else if (selectedSection === 'Shared Files') {
-        filteredFiles = filteredFiles.filter(file => 
-            file.is_shared === true && file.is_archived === false
-        );
-    } else if (selectedSection !== 'Dashboard') {
-        filteredFiles = filteredFiles.filter(file => file.is_archived === false);
+    if (currentFolder) {
+        // When viewing a folder, show all non-deleted files regardless of archive status
+        filteredFiles = filteredFiles.filter(file => !file.is_deleted);
+    } else {
+        // Only apply archive/shared filters when not in a folder view
+        if (selectedSection === 'Archives') {
+            filteredFiles = filteredFiles.filter(file => file.is_archived === true);
+        } else if (selectedSection === 'Shared Files') {
+            filteredFiles = filteredFiles.filter(file => 
+                file.is_shared === true && file.is_archived === false
+            );
+        } else if (selectedSection !== 'Dashboard') {
+            filteredFiles = filteredFiles.filter(file => file.is_archived === false);
+        }
     }
     
 

@@ -79,6 +79,16 @@ const ViewFolder = ({
         });
     };
 
+    // Filter files based on selectedSection
+    const filteredFiles = files.filter(file => {
+        if (selectedSection === 'Archives') {
+            return file.is_archived;
+        } else if (selectedSection === 'Shared Files') {
+            return file.is_shared && !file.is_archived;
+        }
+        return !file.is_archived;
+    });
+
     if (loading) {
         return (
             <div className="flex items-center justify-center text-gray-600 py-8">
@@ -116,7 +126,7 @@ const ViewFolder = ({
                 </div>
             )}
 
-            {folders.length === 0 && files.length === 0 ? (
+            {folders.length === 0 && filteredFiles.length === 0 ? (
                 <div className="p-4 text-gray-500 bg-gray-50 rounded-md text-center">
                     {currentFolder 
                         ? `No contents found in "${currentFolder.name}"`
@@ -159,7 +169,7 @@ const ViewFolder = ({
                         </div>
                     )}
 
-                    {files.length > 0 && (
+                    {filteredFiles.length > 0 && (
                         <div>
                             <h3 className="text-lg font-medium mb-4">Files</h3>
                             <div className="border rounded-lg">
@@ -169,7 +179,7 @@ const ViewFolder = ({
                                     <div className="col-span-3">Last Modified</div>
                                     <div className="col-span-2">Actions</div>
                                 </div>
-                                {files.map((file) => (
+                                {filteredFiles.map((file) => (
                                     <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50">
                                         <div className="col-span-5 flex items-center">
                                             <File size={20} className="text-gray-400 mr-3" />
@@ -201,4 +211,3 @@ const ViewFolder = ({
 };
 
 export default ViewFolder;
-

@@ -366,3 +366,13 @@ func (m *FileModel) ListFolderFiles(userID uint, folderID uint) ([]File, error) 
 	}
 	return files, nil
 }
+func (m *FileModel) ListAllUserFiles(userID uint) ([]File, error) {
+	var files []File
+	err := m.db.Where("user_id = ? AND is_deleted = ?", userID, false).
+		Order("created_at DESC").
+		Find(&files).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user files: %w", err)
+	}
+	return files, nil
+}

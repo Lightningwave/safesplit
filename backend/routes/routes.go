@@ -84,7 +84,7 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:   EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService),
+			UploadFileController:   EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel),
 			ViewFilesController:    EndUser.NewViewFilesController(fileModel, folderModel),
 			DownloadFileController: EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
 			DeleteFileController:   EndUser.NewDeleteFileController(fileModel),
