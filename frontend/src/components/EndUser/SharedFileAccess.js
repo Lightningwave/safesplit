@@ -7,51 +7,58 @@ const SharedFileAccess = () => {
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
+    // Determine if it's a premium share by checking URL path
+    const isPremiumShare = window.location.pathname.includes('/premium/shares/');
+    const shareLink = window.location.pathname.split('/').pop();
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-    
-        const shareLink = window.location.pathname.split('/').pop();
-    
+
         try {
-            const response = await fetch(`http://localhost:8080/api/files/share/${shareLink}`, {
+            // Use different endpoints based on share type
+            const endpoint = isPremiumShare
+                ? `http://localhost:8080/api/premium/shares/${shareLink}`
+                : `http://localhost:8080/api/files/share/${shareLink}`;
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ password }),
             });
-    
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to access file');
             }
-    
+
             // Extract filename from Content-Disposition header
             const disposition = response.headers.get('Content-Disposition');
             let filename = 'download';
             if (disposition) {
-                const filenameMatch = disposition.match(/filename="(.+)"/);
-                if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1];
+                const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (matches && matches[1]) {
+                    filename = matches[1].replace(/['"]/g, '');
                 }
             }
-    
+
             const blob = await response.blob();
-    
-            // Use the browser's download feature
+
+            // Create download link
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.download = filename;
+            link.download = decodeURIComponent(filename);
             document.body.appendChild(link);
             link.click();
             
             // Cleanup
             document.body.removeChild(link);
             window.URL.revokeObjectURL(downloadUrl);
-    
+
         } catch (error) {
             console.error('Download error:', error);
             setError(error.message);
@@ -72,6 +79,11 @@ const SharedFileAccess = () => {
                     </h2>
                     <p className="mt-2 text-sm text-gray-600">
                         Enter the password provided by the file owner to access this file.
+                        {isPremiumShare && (
+                            <span className="block mt-1 text-blue-600">
+                                Premium Share
+                            </span>
+                        )}
                     </p>
                 </div>
 

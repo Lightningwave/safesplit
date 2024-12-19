@@ -77,6 +77,7 @@ function App() {
           />
 
           <Route path="/share/:shareLink" element={<SharedFileAccess />} />
+          <Route path="/premium/share/:shareLink" element={<SharedFileAccess />} />
 
           {/* Protected Routes */}
           <Route 

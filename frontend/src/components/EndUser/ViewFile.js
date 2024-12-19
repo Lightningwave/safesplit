@@ -236,6 +236,7 @@ const ViewFile = ({
                                     <div className="col-span-1">
                                         <FileActions 
                                             file={file} 
+                                            user={user} 
                                             onRefresh={fetchFiles}
                                             onAction={handleFileAction}
                                         />
