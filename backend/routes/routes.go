@@ -37,7 +37,8 @@ type EndUserHandlers struct {
 	PasswordResetController *EndUser.PasswordResetController
 }
 type PremiumUserHandlers struct {
-	FragmentController *PremiumUser.FragmentController
+	FragmentController     *PremiumUser.FragmentController
+	FileRecoveryController *PremiumUser.FileRecoveryController
 }
 
 type SuperAdminHandlers struct {
@@ -104,7 +105,8 @@ func NewRouteHandlers(
 			PasswordResetController: EndUser.NewPasswordResetController(userModel, passwordHistoryModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
-			FragmentController: PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
+			FragmentController:     PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
+			FileRecoveryController: PremiumUser.NewFileRecoveryController(fileModel),
 		},
 	}
 }
@@ -178,6 +180,11 @@ func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandl
 	fragments := premium.Group("/fragments")
 	{
 		fragments.GET("/files/:fileId", handlers.FragmentController.GetUserFragments)
+	}
+	recovery := premium.Group("/recovery")
+	{
+		recovery.GET("/files", handlers.FileRecoveryController.ListRecoverableFiles)
+		recovery.POST("/files/:fileId", handlers.FileRecoveryController.RecoverFile)
 	}
 }
 

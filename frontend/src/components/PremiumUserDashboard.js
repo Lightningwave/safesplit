@@ -7,6 +7,7 @@ import SettingsPage from './EndUser/Settings';
 import ContactUs from './EndUser/ContactUs';
 import CreateFolder from './EndUser/CreateFolder';
 import DeleteFolder from './EndUser/DeleteFolder';
+import TrashBin from './PremiumUser/TrashBin';  
 
 const PremiumUserDashboard = ({ user, onLogout }) => {
     const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -365,14 +366,17 @@ const PremiumUserDashboard = ({ user, onLogout }) => {
                     {selectedSection === 'Settings' && <SettingsPage user={user} />}
                     {selectedSection === 'Contact Us' && <ContactUs onSubmit={(formData) => console.log("Form Submitted:", formData)} />}
                     {selectedSection === 'Dashboard' && renderDashboard()}
-                    {['Uploaded Files', 'Shared Files', 'Archives', 'Trash Bin'].includes(selectedSection) && (
-                        <ViewFile 
-                            searchQuery={searchQuery}
-                            user={user}
-                            selectedSection={selectedSection}
-                            currentFolder={currentFolder}
-                        />
-                    )}
+                    {['Uploaded Files', 'Shared Files', 'Archives'].includes(selectedSection) && (
+                    <ViewFile 
+                        searchQuery={searchQuery}
+                        user={user}
+                        selectedSection={selectedSection}
+                        currentFolder={currentFolder}
+                    />
+                )}
+                {selectedSection === 'Trash Bin' && (
+                    <TrashBin user={user} />
+                )}
                 </div>
             </div>
 

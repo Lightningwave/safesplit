@@ -376,3 +376,49 @@ func (m *FileModel) ListAllUserFiles(userID uint) ([]File, error) {
 	}
 	return files, nil
 }
+func (m *FileModel) GetRecoverableFiles(userID uint) ([]File, error) {
+	var files []File
+	err := m.db.Where("user_id = ? AND is_deleted = ?", userID, true).
+		Order("deleted_at DESC").
+		Find(&files).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch deleted files: %w", err)
+	}
+
+	return files, nil
+}
+
+// RecoverFile recovers a deleted file and updates storage usage
+func (m *FileModel) RecoverFile(fileID, userID uint) error {
+	tx := m.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get the deleted file
+	var file File
+	if err := tx.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, true).First(&file).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("file not found or already recovered: %w", err)
+	}
+
+	// Update file status
+	if err := tx.Model(&file).Updates(map[string]interface{}{
+		"is_deleted": false,
+		"deleted_at": nil,
+	}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to recover file: %w", err)
+	}
+
+	// Update user storage
+	if err := m.UpdateUserStorage(tx, userID, file.Size); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update storage: %w", err)
+	}
+
+	return tx.Commit().Error
+}
