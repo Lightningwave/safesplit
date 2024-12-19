@@ -35,6 +35,7 @@ type EndUserHandlers struct {
 	ViewFolderController    *EndUser.ViewFolderController
 	DeleteFolderController  *EndUser.DeleteFolderController
 	PasswordResetController *EndUser.PasswordResetController
+	ViewStorageController   *EndUser.ViewStorageController
 }
 type PremiumUserHandlers struct {
 	FragmentController     *PremiumUser.FragmentController
@@ -103,6 +104,7 @@ func NewRouteHandlers(
 			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:  EndUser.NewDeleteFolderController(folderModel, activityLogModel),
 			PasswordResetController: EndUser.NewPasswordResetController(userModel, passwordHistoryModel),
+			ViewStorageController:   EndUser.NewViewStorageController(fileModel, userModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:     PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
@@ -173,6 +175,10 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		folders.GET("/:id", handlers.ViewFolderController.GetFolderContents) // Get folder contents
 		folders.POST("", handlers.CreateFolderController.Create)             // Create new folder
 		folders.DELETE("/:id", handlers.DeleteFolderController.Delete)       // Delete folder
+	}
+	storage := protected.Group("/storage")
+	{
+		storage.GET("/info", handlers.ViewStorageController.GetStorageInfo)
 	}
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {

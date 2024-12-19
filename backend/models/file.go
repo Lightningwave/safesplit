@@ -422,3 +422,15 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 
 	return tx.Commit().Error
 }
+
+// GetUserFileCount returns the total number of non-deleted files for a user
+func (m *FileModel) GetUserFileCount(userID uint) (int64, error) {
+	var count int64
+	err := m.db.Model(&File{}).
+		Where("user_id = ? AND is_deleted = ?", userID, false).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count files: %w", err)
+	}
+	return count, nil
+}

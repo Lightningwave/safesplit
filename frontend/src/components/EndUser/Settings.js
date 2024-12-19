@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
 import PasswordReset from './PasswordReset';
+import ViewStorage from './ViewStorage';  
 
 const Settings = ({ user }) => {
     const [activeTab, setActiveTab] = useState('account');
-
-    // Dummy storage data - in a real scenario, this could be fetched from an API
-    const usedStorage = '2GB';
-    const totalStorage = '10GB';
 
     return (
         <div className="bg-white p-6 rounded shadow-md">
@@ -50,7 +47,6 @@ const Settings = ({ user }) => {
                     <h2 className="text-xl font-semibold mb-4">Account Details</h2>
                     <p><strong>Username:</strong> {user.username}</p>
                     <p><strong>Email:</strong> {user.email}</p>
-
                 </div>
             )}
 
@@ -66,22 +62,7 @@ const Settings = ({ user }) => {
                 </div>
             )}
 
-            {activeTab === 'storage' && (
-                <div>
-                    <h2 className="text-xl font-semibold mb-4">Storage Usage</h2>
-                    <p>You have used {usedStorage} of {totalStorage}.</p>
-                    <div className="w-full bg-gray-200 rounded h-4 mt-2 mb-4 relative">
-                        <div
-                            className="bg-blue-600 h-4 rounded"
-                            style={{ width: `${(parseFloat(usedStorage) / parseFloat(totalStorage)) * 100}%` }}
-                        ></div>
-                    </div>
-                    <p>Consider upgrading your plan for more storage.</p>
-                    <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                        Upgrade Plan
-                    </button>
-                </div>
-            )}
+            {activeTab === 'storage' && <ViewStorage />}
         </div>
     );
 };
