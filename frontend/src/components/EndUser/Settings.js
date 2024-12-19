@@ -47,6 +47,7 @@ const Settings = ({ user }) => {
                     <h2 className="text-xl font-semibold mb-4">Account Details</h2>
                     <p><strong>Username:</strong> {user.username}</p>
                     <p><strong>Email:</strong> {user.email}</p>
+                    <p><strong>Subscription Plan:</strong> {user.subscription_status}</p>
                 </div>
             )}
 

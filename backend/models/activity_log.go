@@ -15,7 +15,7 @@ type ActivityLog struct {
 	IPAddress    string    `json:"ip_address"`
 	Status       string    `json:"status" gorm:"type:enum('success','failure')"`
 	ErrorMessage string    `json:"error_message,omitempty"`
-	Details      string    `json:"details,omitempty"` // Add this field
+	Details      string    `json:"details,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	User         User      `json:"user" gorm:"foreignKey:UserID"`
 }

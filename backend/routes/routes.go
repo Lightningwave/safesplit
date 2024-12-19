@@ -38,8 +38,9 @@ type EndUserHandlers struct {
 	ViewStorageController   *EndUser.ViewStorageController
 }
 type PremiumUserHandlers struct {
-	FragmentController     *PremiumUser.FragmentController
-	FileRecoveryController *PremiumUser.FileRecoveryController
+	FragmentController          *PremiumUser.FragmentController
+	FileRecoveryController      *PremiumUser.FileRecoveryController
+	AdvancedShareFileController *PremiumUser.ShareFileController
 }
 
 type SuperAdminHandlers struct {
@@ -107,8 +108,9 @@ func NewRouteHandlers(
 			ViewStorageController:   EndUser.NewViewStorageController(fileModel, userModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
-			FragmentController:     PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
-			FileRecoveryController: PremiumUser.NewFileRecoveryController(fileModel),
+			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
+			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
+			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
 		},
 	}
 }
@@ -129,6 +131,7 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 	api.POST("/super-login", handlers.SuperAdminLoginController.Login)
 	api.POST("/register", handlers.CreateAccountController.CreateAccount)
 	api.POST("/files/share/:shareLink", handlers.EndUserHandlers.ShareFileController.AccessShare)
+	api.POST("/premium/shares/:shareLink", handlers.PremiumUserHandlers.AdvancedShareFileController.AccessShare)
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
@@ -191,6 +194,10 @@ func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandl
 	{
 		recovery.GET("/files", handlers.FileRecoveryController.ListRecoverableFiles)
 		recovery.POST("/files/:fileId", handlers.FileRecoveryController.RecoverFile)
+	}
+	shares := premium.Group("/shares")
+	{
+		shares.POST("/files/:id", handlers.AdvancedShareFileController.CreateShare)
 	}
 }
 

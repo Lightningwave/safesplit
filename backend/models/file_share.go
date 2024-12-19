@@ -126,6 +126,72 @@ func (m *FileShareModel) ValidateShareAccess(shareLink string, password string) 
 	return &share, nil
 }
 
+// CreateFileShare creates a basic file share with just password protection
+func (m *FileShareModel) CreateFileShare(share *FileShare, password string) error {
+	// Generate password salt
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return fmt.Errorf("failed to generate salt: %w", err)
+	}
+	share.PasswordSalt = base64.StdEncoding.EncodeToString(salt)
+
+	// Hash password with salt
+	hashedPassword, err := bcrypt.GenerateFromPassword(
+		[]byte(password+share.PasswordSalt),
+		bcrypt.DefaultCost,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	share.PasswordHash = string(hashedPassword)
+
+	// Generate unique share link
+	shareLink, err := generateShareLink()
+	if err != nil {
+		return fmt.Errorf("failed to generate share link: %w", err)
+	}
+	share.ShareLink = shareLink
+
+	// Start transaction
+	tx := m.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+
+	// Create share record within transaction
+	if err := tx.Create(share).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create share record: %w", err)
+	}
+
+	// Update file's IsShared status
+	if err := tx.Model(&File{}).Where("id = ?", share.FileID).Update("is_shared", true).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update file status: %w", err)
+	}
+
+	return tx.Commit().Error
+}
+
+// ValidateShare validates a share without checking expiry or download count
+func (m *FileShareModel) ValidateShare(shareLink string, password string) (*FileShare, error) {
+	var share FileShare
+	if err := m.db.Where("share_link = ? AND is_active = ?", shareLink, true).
+		Preload("File").First(&share).Error; err != nil {
+		return nil, fmt.Errorf("share not found or inactive")
+	}
+
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(share.PasswordHash),
+		[]byte(password+share.PasswordSalt),
+	); err != nil {
+		return nil, fmt.Errorf("invalid password")
+	}
+
+	return &share, nil
+}
+
 func (m *FileShareModel) IncrementDownloadCount(shareID uint) error {
 	return m.db.Model(&FileShare{}).
 		Where("id = ?", shareID).

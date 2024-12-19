@@ -115,11 +115,11 @@ npm install lucide-react       # For icons
 
 # Development dependencies
 npm install -D tailwindcss postcss autoprefixer
-npm install @tailwindcss/aspect-ratio # For demo video aspect ratio
-npx tailwindcss init -p       # Initialize Tailwind CSS
+npm install @tailwindcss/aspect-ratio 
+npx tailwindcss init -p       
 
 # Optional: if you want animations
-npm install framer-motion     # For animations
+npm install framer-motion     
 ```
 
 3. Configure Tailwind CSS - Update `tailwind.config.js`:

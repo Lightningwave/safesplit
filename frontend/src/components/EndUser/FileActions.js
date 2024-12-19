@@ -5,7 +5,7 @@ import DeleteFileAction from './DeleteFileAction';
 import ShareFileAction from './ShareFileAction';
 import ArchiveFileAction from './ArchiveFileAction';
 
-const FileActions = ({ file }) => {
+const FileActions = ({ file, user, onRefresh, onAction }) => {
     const [showActions, setShowActions] = useState(false);
 
     return (
@@ -21,7 +21,7 @@ const FileActions = ({ file }) => {
             {showActions && (
                 <div className="absolute right-0 mt-2 py-2 w-48 bg-white rounded-md shadow-xl z-20 border">
                     <DownloadFileAction file={file} />
-                    <ShareFileAction file={file} />
+                    <ShareFileAction file={file} user={user} />
                     <ArchiveFileAction file={file} />
                     <DeleteFileAction file={file} />
                 </div>

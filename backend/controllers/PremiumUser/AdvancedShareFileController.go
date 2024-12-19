@@ -1,4 +1,4 @@
-package EndUser
+package PremiumUser
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"safesplit/models"
 	"safesplit/services"
@@ -38,15 +39,16 @@ func NewShareFileController(
 }
 
 type CreateShareRequest struct {
-	FileID   uint   `json:"file_id" binding:"required"`
-	Password string `json:"password" binding:"required,min=6"`
+	FileID       uint       `json:"file_id" binding:"required"`
+	Password     string     `json:"password" binding:"required,min=6"`
+	ExpiresAt    *time.Time `json:"expires_at"`
+	MaxDownloads *int       `json:"max_downloads"`
 }
 
 type AccessShareRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// CreateShare generates a share link for a file
 func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	var req CreateShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -57,7 +59,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Get current user
 	user, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
@@ -68,9 +69,9 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	}
 	currentUser := user.(*models.User)
 
-	// Verify file ownership
 	file, err := c.fileModel.GetFileForDownload(req.FileID, currentUser.ID)
 	if err != nil {
+		log.Printf("File access error: %v", err)
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"status": "error",
 			"error":  "File not found or access denied",
@@ -78,9 +79,17 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Get key fragments
+	if req.ExpiresAt != nil && req.ExpiresAt.Before(time.Now()) {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "Expiry date cannot be in the past",
+		})
+		return
+	}
+
 	fragments, err := c.keyFragmentModel.GetKeyFragments(file.ID)
 	if err != nil || len(fragments) == 0 {
+		log.Printf("Failed to retrieve key fragments: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to retrieve key fragments",
@@ -88,12 +97,12 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Encrypt fragment with share password
 	encryptedFragment, err := c.encryptionService.EncryptKeyFragment(
 		fragments[0].EncryptedFragment,
 		[]byte(req.Password),
 	)
 	if err != nil {
+		log.Printf("Fragment encryption error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to process share encryption",
@@ -101,15 +110,17 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Create share record
 	share := &models.FileShare{
 		FileID:               file.ID,
 		SharedBy:             currentUser.ID,
 		EncryptedKeyFragment: encryptedFragment,
+		ExpiresAt:            req.ExpiresAt,
+		MaxDownloads:         req.MaxDownloads,
 		IsActive:             true,
 	}
 
-	if err := c.fileShareModel.CreateFileShare(share, req.Password); err != nil {
+	if err := c.fileShareModel.CreateFileShareWithStatus(share, req.Password); err != nil {
+		log.Printf("Share creation error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to create share",
@@ -117,7 +128,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Log share creation
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       currentUser.ID,
 		ActivityType: "share",
@@ -136,7 +146,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	})
 }
 
-// AccessShare handles accessing a shared file
 func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	shareLink := ctx.Param("shareLink")
 	var req AccessShareRequest
@@ -148,19 +157,18 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Validate share access
-	share, err := c.fileShareModel.ValidateShare(shareLink, req.Password)
+	share, err := c.fileShareModel.ValidateShareAccess(shareLink, req.Password)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
-			"error":  "Invalid share link or password",
+			"error":  err.Error(),
 		})
 		return
 	}
 
-	// Get file fragments
-	fragments, err := c.keyFragmentModel.GetKeyFragments(share.FileID)
-	if err != nil || len(fragments) == 0 {
+	allFragments, err := c.keyFragmentModel.GetKeyFragments(share.FileID)
+	if err != nil || len(allFragments) == 0 {
+		log.Printf("Failed to retrieve file fragments: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to process file access",
@@ -168,12 +176,12 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Decrypt shared fragment
 	decryptedFragment, err := c.encryptionService.DecryptKeyFragment(
 		share.EncryptedKeyFragment,
 		[]byte(req.Password),
 	)
 	if err != nil {
+		log.Printf("Fragment decryption error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to process file decryption",
@@ -181,9 +189,9 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Get file details
 	file, err := c.fileModel.GetFileByID(share.FileID)
 	if err != nil {
+		log.Printf("File retrieval error: %v", err)
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"status": "error",
 			"error":  "File not found",
@@ -191,9 +199,8 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Prepare key shares
-	shares := make([]services.KeyShare, len(fragments))
-	for i, fragment := range fragments {
+	shares := make([]services.KeyShare, len(allFragments))
+	for i, fragment := range allFragments {
 		if i == 0 {
 			shares[i] = services.KeyShare{
 				Index: fragment.FragmentIndex,
@@ -207,9 +214,9 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		}
 	}
 
-	// Read and decrypt file
 	encryptedData, err := c.fileModel.ReadFileContent(file.FilePath)
 	if err != nil {
+		log.Printf("File read error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to read file",
@@ -224,6 +231,7 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		int(file.Threshold),
 	)
 	if err != nil {
+		log.Printf("File decryption error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "Failed to decrypt file",
@@ -231,30 +239,32 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Log share access (only once)
+	if err := c.fileShareModel.IncrementDownloadCount(share.ID); err != nil {
+		log.Printf("Failed to increment download count: %v", err)
+	}
+
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
-		UserID:       share.SharedBy,
-		ActivityType: "download",
+		ActivityType: "share_download",
 		FileID:       &file.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
-		Details:      "Shared file download",
 	}); err != nil {
 		log.Printf("Failed to log share download activity: %v", err)
 	}
 
-	// Improved filename handling for download
+	// Sanitize filename and prepare headers
 	sanitizedFilename := strings.ReplaceAll(file.OriginalName, `"`, `\"`)
-	encodedFilename := url.QueryEscape(sanitizedFilename)
 
-	// Set headers with both encoded and unencoded filenames for better browser compatibility
+	// Set response headers
 	ctx.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Type, Content-Length")
-	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
-		sanitizedFilename,
-		encodedFilename))
+	ctx.Header("Content-Description", "File Transfer")
+	ctx.Header("Content-Transfer-Encoding", "binary")
+	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, sanitizedFilename))
 	ctx.Header("Content-Type", file.MimeType)
 	ctx.Header("Content-Length", fmt.Sprintf("%d", len(decryptedData)))
+	ctx.Header("X-Original-Filename", url.QueryEscape(file.OriginalName))
 
-	// Send file
+	// Send the decrypted file data as a downloadable attachment
 	ctx.Data(http.StatusOK, file.MimeType, decryptedData)
+
 }
