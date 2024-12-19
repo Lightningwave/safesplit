@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 
 const TrashBin = ({ user }) => {
     const [deletedFiles, setDeletedFiles] = useState([]);
@@ -99,7 +99,6 @@ const TrashBin = ({ user }) => {
         <div className="space-y-4">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center space-x-2">
-                    <Trash2 className="text-gray-500" />
                     <h2 className="text-xl font-semibold">Deleted Files</h2>
                     <span className="text-sm text-gray-500">
                         ({deletedFiles.length} {deletedFiles.length === 1 ? 'item' : 'items'})
@@ -123,7 +122,6 @@ const TrashBin = ({ user }) => {
 
             {deletedFiles.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                    <Trash2 size={48} className="mx-auto mb-4 opacity-50" />
                     <p>No deleted files found</p>
                 </div>
             ) : (
