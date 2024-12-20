@@ -79,28 +79,28 @@ function HomePage() {
           </div>
         </section>
 
-{/* Demo Section */}
-<section className="w-full py-24">
-         <div className="container mx-auto max-w-[1200px] px-4">
-           <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
-             See How It Works
-           </h2>
-           <div className="relative w-full mx-auto" style={{ maxWidth: '1920px', maxHeight: '1080px', paddingBottom: '56.25%' }}>
-             <iframe
-               src="https://www.youtube.com/embed/2uuR7ziG2BM"
-               title="Safesplit Demo"
-               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-               allowFullScreen
-               className="absolute top-0 left-0 w-full h-full rounded-lg shadow-lg"
-               width="1920"
-               height="1080"
-             ></iframe>
-           </div>
-           <p className="text-center mt-8 text-gray-600 max-w-2xl mx-auto">
-             Watch our demo to see how Safesplit makes file sharing secure and simple using Shamir's Secret Sharing algorithm.
-           </p>
-         </div>
-       </section>
+    {/* Demo Section */}
+    <section className="w-full py-24">
+      <div className="container mx-auto max-w-[1200px] px-4">
+        <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
+          See How It Works
+        </h2>
+        <div className="w-full max-w-[1200px] mx-auto">
+          <div className="relative w-full pt-[56.25%]">
+            <iframe
+              src="https://www.youtube.com/embed/2uuR7ziG2BM"
+              title="Safesplit Demo"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 w-full h-full rounded-lg shadow-lg"
+            />
+          </div>
+        </div>
+        <p className="text-center mt-8 text-gray-600 max-w-2xl mx-auto">
+          Watch our demo to see how Safesplit makes file sharing secure and simple using Shamir's Secret Sharing algorithm.
+        </p>
+      </div>
+    </section>
 
         {/* Pricing Section */}
         <section id="pricing" className="w-full py-24">
