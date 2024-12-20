@@ -57,7 +57,6 @@ safesplit/
 
 ### Prerequisites
 - Go 1.16+
-- Node.js 14+
 - MySQL
 
 ### Backend Setup
