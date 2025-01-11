@@ -88,19 +88,21 @@ CREATE TABLE files (
     mime_type VARCHAR(127),                       -- File type for download handling
     is_archived BOOLEAN DEFAULT FALSE,            -- Whether file is archived
     is_deleted BOOLEAN DEFAULT FALSE,             -- Soft delete flag
-    is_shared BOOLEAN DEFAULT FALSE,
+    is_shared BOOLEAN DEFAULT FALSE,              -- Whether file is shared
     deleted_at TIMESTAMP NULL,                    -- When file was soft deleted
     encryption_iv BINARY(16),                     -- AES initialization vector
     encryption_salt BINARY(32),                   -- Salt for key derivation
     share_count INTEGER NOT NULL DEFAULT 2,       -- Number of shares for Shamir's scheme
     threshold INTEGER NOT NULL DEFAULT 2,         -- Threshold for Shamir's scheme
     file_hash VARCHAR(64) NOT NULL,               -- Hash for integrity verification
+    data_shard_count INTEGER NOT NULL DEFAULT 4,  -- Number of data shards for Reed-Solomon
+    parity_shard_count INTEGER NOT NULL DEFAULT 2,-- Number of parity shards for Reed-Solomon
+    is_sharded BOOLEAN DEFAULT FALSE,             -- Whether file uses Reed-Solomon encoding
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
 );
-
 
 -- Key fragments table
 -- Purpose: Implements Shamir's Secret Sharing for encryption keys

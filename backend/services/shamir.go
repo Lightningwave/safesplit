@@ -54,18 +54,43 @@ func (s *ShamirService) RecombineKey(shares []KeyShare, k int) ([]byte, error) {
 		return nil, fmt.Errorf("insufficient shares: got %d, need %d", len(shares), k)
 	}
 
-	// Convert our KeyShare format to bytes for Hashicorp's implementation
-	rawShares := make([][]byte, len(shares))
-	for i, share := range shares {
+	// Find the maximum index to determine array size
+	maxIndex := 0
+	for _, share := range shares {
+		if share.Index > maxIndex {
+			maxIndex = share.Index
+		}
+	}
+
+	// Create array sized to fit all shares
+	rawShares := make([][]byte, maxIndex)
+
+	// Place shares in their correct positions
+	for _, share := range shares {
 		value, err := base64.StdEncoding.DecodeString(share.Value)
 		if err != nil {
 			return nil, fmt.Errorf("invalid share value at index %d: %w", share.Index, err)
 		}
-		rawShares[i] = value
+		// Shamir indexes start at 1, so adjust by -1 for array indexing
+		rawShares[share.Index-1] = value
+	}
+
+	// Remove any nil entries to ensure only valid shares are used
+	validShares := make([][]byte, 0, len(shares))
+	for _, share := range rawShares {
+		if share != nil {
+			validShares = append(validShares, share)
+		}
+	}
+
+	// Verify we still have enough shares after filtering
+	if len(validShares) < k {
+		return nil, fmt.Errorf("insufficient valid shares after filtering: got %d, need %d",
+			len(validShares), k)
 	}
 
 	// Use Hashicorp's Shamir implementation to combine the shares
-	secret, err := shamir.Combine(rawShares)
+	secret, err := shamir.Combine(validShares)
 	if err != nil {
 		return nil, fmt.Errorf("failed to combine shares: %w", err)
 	}
