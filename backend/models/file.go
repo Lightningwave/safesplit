@@ -31,6 +31,9 @@ type File struct {
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
 	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
+	DataShardCount   uint       `json:"data_shard_count" gorm:"not null;default:4"`
+	ParityShardCount uint       `json:"parity_shard_count" gorm:"not null;default:2"`
+	IsSharded        bool       `json:"is_sharded" gorm:"default:false"`
 	IsShared         bool       `json:"is_shared" gorm:"default:false"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
@@ -39,12 +42,14 @@ type File struct {
 type FileModel struct {
 	db              *gorm.DB
 	storageBasePath string
+	rsService       *services.ReedSolomonService
 }
 
-func NewFileModel(db *gorm.DB) *FileModel {
+func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService) *FileModel {
 	return &FileModel{
 		db:              db,
 		storageBasePath: filepath.Join("storage", "files"),
+		rsService:       rsService,
 	}
 }
 
@@ -96,7 +101,7 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 	return nil
 }
 
-func (m *FileModel) CreateFileWithFragments(file *File, shares []services.KeyShare, keyFragmentModel *KeyFragmentModel) error {
+func (m *FileModel) CreateFileWithShards(file *File, shares []services.KeyShare, shards [][]byte, keyFragmentModel *KeyFragmentModel) error {
 	if err := m.InitializeStorage(); err != nil {
 		return err
 	}
@@ -118,32 +123,63 @@ func (m *FileModel) CreateFileWithFragments(file *File, shares []services.KeySha
 		}
 	}
 
-	// Set storage path
-	file.FilePath = m.GenerateStoragePath(file.Name)
-
 	// Create file record
 	if err := m.CreateFile(tx, file); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to create file record: %w", err)
 	}
 
+	// Store the Reed-Solomon shards
+	if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to store shards: %w", err)
+	}
+
 	// Save key fragments
 	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares); err != nil {
+		// Clean up stored shards on failure
+		m.rsService.DeleteShards(file.ID)
 		tx.Rollback()
 		return fmt.Errorf("failed to save key fragments: %w", err)
 	}
 
 	// Update user storage
 	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+		// Clean up stored shards on failure
+		m.rsService.DeleteShards(file.ID)
 		tx.Rollback()
 		return fmt.Errorf("failed to update storage usage: %w", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
+		// Clean up stored shards on failure
+		m.rsService.DeleteShards(file.ID)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
+}
+
+// ReadFileShards retrieves and reconstructs the file content from shards
+func (m *FileModel) ReadFileShards(file *File) ([]byte, error) {
+	// Retrieve all available shards
+	fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve shards: %w", err)
+	}
+
+	// Validate we have enough shards for reconstruction
+	if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
+		return nil, fmt.Errorf("insufficient shards available for reconstruction")
+	}
+
+	// Reconstruct the original data
+	reconstructed, err := m.rsService.ReconstructFile(fileShards.Shards, int(file.DataShardCount), int(file.ParityShardCount))
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconstruct file: %w", err)
+	}
+
+	return reconstructed, nil
 }
 
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
@@ -158,6 +194,7 @@ func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 	return &file, nil
 }
 
+// GetFileForDownload updated to handle Reed-Solomon shards
 func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 	var file File
 	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
@@ -171,7 +208,10 @@ func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 		return nil, fmt.Errorf("database error: %w", err)
 	}
 
-	log.Printf("File download requested - ID: %d, Path: %s, Owner: %d", file.ID, file.FilePath, file.UserID)
+	// Log the request
+	log.Printf("File download requested - ID: %d, Path: %s, Owner: %d, IsSharded: %v",
+		file.ID, file.FilePath, file.UserID, file.IsSharded)
+
 	return &file, nil
 }
 
@@ -208,25 +248,60 @@ func (m *FileModel) ListUserFilesInFolder(userID uint, folderID *uint) ([]File, 
 }
 
 // File operations
+// DeleteFile updates to handle Reed-Solomon shards
 func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	tx := m.db.Begin()
 
+	log.Printf("Starting file deletion process - File ID: %d, User ID: %d", fileID, userID)
+
+	var file File
+	if err := tx.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).First(&file).Error; err != nil {
+		tx.Rollback()
+		log.Printf("File not found or already deleted - ID: %d, Error: %v", fileID, err)
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	log.Printf("Found file to delete - ID: %d, IsSharded: %v, Size: %d bytes",
+		file.ID, file.IsSharded, file.Size)
+
 	// Soft delete the file
-	result := tx.Model(&File{}).
-		Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
-		Updates(map[string]interface{}{
-			"is_deleted": true,
-			"deleted_at": time.Now(),
-		})
+	result := tx.Model(&file).Updates(map[string]interface{}{
+		"is_deleted": true,
+		"deleted_at": time.Now(),
+	})
 
 	if result.Error != nil {
 		tx.Rollback()
+		log.Printf("Failed to soft delete file - ID: %d, Error: %v", fileID, result.Error)
 		return fmt.Errorf("failed to delete file: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
+	// Handle physical file deletion based on storage type
+	if file.IsSharded {
+		log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
+		// Delete shards
+		if err := m.rsService.DeleteShards(fileID); err != nil {
+			tx.Rollback()
+			log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
+			return fmt.Errorf("failed to delete shards: %w", err)
+		}
+		log.Printf("Successfully deleted shards for file %d", fileID)
+	} else {
+		// Delete regular file if it exists
+		if file.FilePath != "" {
+			if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
+				log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
+				// Don't rollback here as the file might have been already moved/deleted
+				log.Printf("Continuing deletion process despite file removal error")
+			}
+		}
+	}
+
+	// Update user storage
+	if err := m.UpdateUserStorage(tx, userID, -file.Size); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("file not found or already deleted")
+		log.Printf("Failed to update storage usage - User ID: %d, Error: %v", userID, err)
+		return fmt.Errorf("failed to update storage usage: %w", err)
 	}
 
 	// Log activity
@@ -236,17 +311,22 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		FileID:       &fileID,
 		IPAddress:    ipAddress,
 		Status:       "success",
+		Details:      fmt.Sprintf("File deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
 	}
 
 	if err := tx.Create(activity).Error; err != nil {
 		tx.Rollback()
+		log.Printf("Failed to log deletion activity - File ID: %d, Error: %v", fileID, err)
 		return fmt.Errorf("failed to log activity: %w", err)
 	}
 
+	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
+		log.Printf("Failed to commit deletion transaction - File ID: %d, Error: %v", fileID, err)
 		return fmt.Errorf("failed to complete delete operation: %w", err)
 	}
 
+	log.Printf("Successfully completed file deletion - ID: %d", fileID)
 	return nil
 }
 
@@ -390,37 +470,129 @@ func (m *FileModel) GetRecoverableFiles(userID uint) ([]File, error) {
 }
 
 // RecoverFile recovers a deleted file and updates storage usage
+// RecoverFile updated to handle Reed-Solomon shards
 func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	tx := m.db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
+			log.Printf("Panic recovered in RecoverFile: %v", r)
 			tx.Rollback()
 		}
 	}()
+
+	log.Printf("Starting file recovery process - File ID: %d, User ID: %d", fileID, userID)
 
 	// Get the deleted file
 	var file File
 	if err := tx.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, true).First(&file).Error; err != nil {
 		tx.Rollback()
+		log.Printf("Failed to find deleted file: ID=%d, Error: %v", fileID, err)
 		return fmt.Errorf("file not found or already recovered: %w", err)
 	}
 
+	log.Printf("Found deleted file - ID: %d, IsSharded: %v, Size: %d bytes",
+		file.ID, file.IsSharded, file.Size)
+
+	// Verify storage space
+	usedStorage, quota, err := m.GetUserStorageInfo(userID)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("Failed to get storage info - User ID: %d, Error: %v", userID, err)
+		return fmt.Errorf("failed to verify storage availability: %w", err)
+	}
+
+	if usedStorage+file.Size > quota {
+		tx.Rollback()
+		log.Printf("Insufficient storage space - Used: %d, Quota: %d, Required: %d",
+			usedStorage, quota, file.Size)
+		return fmt.Errorf("insufficient storage space for recovery")
+	}
+
+	// Verify file data
+	if file.IsSharded {
+		log.Printf("Verifying shards for file %d", file.ID)
+		// Check shards integrity
+		fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
+		if err != nil {
+			tx.Rollback()
+			log.Printf("Failed to retrieve shards: %v", err)
+			return fmt.Errorf("failed to verify file shards: %w", err)
+		}
+
+		validShards := 0
+		for i, shard := range fileShards.Shards {
+			if shard != nil {
+				validShards++
+				log.Printf("Found valid shard %d: %d bytes", i, len(shard))
+			} else {
+				log.Printf("Missing shard %d", i)
+			}
+		}
+
+		if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
+			tx.Rollback()
+			log.Printf("Insufficient shards - Found %d, Need %d", validShards, file.DataShardCount)
+			return fmt.Errorf("cannot recover file: insufficient shards available (%d/%d)",
+				validShards, file.DataShardCount)
+		}
+
+		log.Printf("Verified shards availability - Found %d valid shards", validShards)
+	} else {
+		// Verify regular file exists
+		if file.FilePath != "" {
+			if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
+				tx.Rollback()
+				log.Printf("File content not found at path: %s", file.FilePath)
+				return fmt.Errorf("file content not found: %w", err)
+			}
+		}
+	}
+
 	// Update file status
-	if err := tx.Model(&file).Updates(map[string]interface{}{
+	updateResult := tx.Model(&file).Updates(map[string]interface{}{
 		"is_deleted": false,
 		"deleted_at": nil,
-	}).Error; err != nil {
+	})
+	if updateResult.Error != nil {
 		tx.Rollback()
-		return fmt.Errorf("failed to recover file: %w", err)
+		log.Printf("Failed to update file status: %v", updateResult.Error)
+		return fmt.Errorf("failed to recover file: %w", updateResult.Error)
+	}
+	if updateResult.RowsAffected == 0 {
+		tx.Rollback()
+		log.Printf("No rows affected when updating file status")
+		return fmt.Errorf("file recovery failed: no changes made")
 	}
 
 	// Update user storage
 	if err := m.UpdateUserStorage(tx, userID, file.Size); err != nil {
 		tx.Rollback()
+		log.Printf("Failed to update storage usage: %v", err)
 		return fmt.Errorf("failed to update storage: %w", err)
 	}
 
-	return tx.Commit().Error
+	// Log recovery activity
+	activity := &ActivityLog{
+		UserID:       userID,
+		ActivityType: "recover",
+		FileID:       &file.ID,
+		Status:       "success",
+		Details:      fmt.Sprintf("File recovered (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
+	}
+
+	if err := tx.Create(activity).Error; err != nil {
+		tx.Rollback()
+		log.Printf("Failed to log recovery activity: %v", err)
+		return fmt.Errorf("failed to log recovery activity: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("Failed to commit recovery transaction: %v", err)
+		return fmt.Errorf("failed to complete recovery: %w", err)
+	}
+
+	log.Printf("Successfully recovered file - ID: %d", file.ID)
+	return nil
 }
 
 // GetUserFileCount returns the total number of non-deleted files for a user

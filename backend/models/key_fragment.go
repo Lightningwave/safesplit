@@ -2,7 +2,9 @@ package models
 
 import (
 	"fmt"
+	"log"
 	"safesplit/services"
+	"sort"
 	"time"
 
 	"gorm.io/gorm"
@@ -32,9 +34,9 @@ func NewKeyFragmentModel(db *gorm.DB) *KeyFragmentModel {
 	return &KeyFragmentModel{db: db}
 }
 
-// SaveKeyFragments stores threshold-1 fragments in the system and the rest with the user
+// SaveKeyFragments stores fragments with proper distribution between system and user
 func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []services.KeyShare) error {
-	// Get just the threshold value directly
+	// Get file threshold
 	var threshold uint
 	if err := tx.Table("files").
 		Select("threshold").
@@ -43,13 +45,20 @@ func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []s
 		return fmt.Errorf("failed to get file threshold: %w", err)
 	}
 
+	log.Printf("Saving key fragments for file %d - Total shares: %d, Threshold: %d",
+		fileID, len(shares), threshold)
+
+	// Validate share count
+	if len(shares) < int(threshold) {
+		return fmt.Errorf("insufficient shares: have %d, need %d", len(shares), threshold)
+	}
+
 	// System stores threshold-1 fragments
 	systemFragmentCount := int(threshold) - 1
 	fragments := make([]KeyFragment, len(shares))
 
 	for i, share := range shares {
 		holderType := UserHolder
-		// First threshold-1 fragments go to system
 		if i < systemFragmentCount {
 			holderType = SystemHolder
 		}
@@ -60,17 +69,44 @@ func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []s
 			EncryptedFragment: []byte(share.Value),
 			HolderType:        holderType,
 		}
+		log.Printf("Creating fragment %d - Index: %d, Type: %s, Length: %d",
+			i, share.Index, holderType, len(share.Value))
 	}
 
-	if err := tx.Create(&fragments).Error; err != nil {
-		return fmt.Errorf("failed to save key fragments: %w", err)
+	// Save fragments in transaction
+	result := tx.Create(&fragments)
+	if result.Error != nil {
+		return fmt.Errorf("failed to save key fragments: %w", result.Error)
+	}
+	if result.RowsAffected != int64(len(fragments)) {
+		return fmt.Errorf("failed to save all fragments: saved %d of %d",
+			result.RowsAffected, len(fragments))
 	}
 
+	log.Printf("Successfully saved %d key fragments for file %d", len(fragments), fileID)
 	return nil
 }
 
+// GetKeyFragments retrieves and verifies fragments for reconstruction
 func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]KeyFragment, error) {
 	var fragments []KeyFragment
+
+	// Get file information
+	var file struct {
+		Threshold  uint
+		ShareCount uint
+	}
+	if err := m.db.Table("files").
+		Select("threshold, share_count").
+		Where("id = ?", fileID).
+		Scan(&file).Error; err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	log.Printf("Retrieving key fragments for file %d - Threshold: %d, Expected shares: %d",
+		fileID, file.Threshold, file.ShareCount)
+
+	// Retrieve all fragments
 	err := m.db.Where("file_id = ?", fileID).
 		Order("fragment_index asc").
 		Find(&fragments).Error
@@ -82,29 +118,80 @@ func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]KeyFragment, error) {
 		return nil, fmt.Errorf("no key fragments found for file ID %d", fileID)
 	}
 
+	// Count fragments by type
+	systemCount := 0
+	userCount := 0
+	fragmentSizes := make(map[int]int)
+	for _, f := range fragments {
+		if f.HolderType == SystemHolder {
+			systemCount++
+		} else {
+			userCount++
+		}
+		fragmentSizes[f.FragmentIndex] = len(f.EncryptedFragment)
+		log.Printf("Retrieved fragment - Index: %d, Type: %s, Length: %d",
+			f.FragmentIndex, f.HolderType, len(f.EncryptedFragment))
+	}
+
+	log.Printf("Retrieved %d total fragments (System: %d, User: %d) for file %d",
+		len(fragments), systemCount, userCount, fileID)
+
+	// Validate fragment count
+	if len(fragments) < int(file.Threshold) {
+		return nil, fmt.Errorf("insufficient fragments: have %d, need %d",
+			len(fragments), file.Threshold)
+	}
+
+	// Verify fragment integrity
+	expectedSize := -1
+	for idx, size := range fragmentSizes {
+		if expectedSize == -1 {
+			expectedSize = size
+		} else if size != expectedSize {
+			log.Printf("Fragment size mismatch - Index %d: %d bytes (expected %d)",
+				idx, size, expectedSize)
+			return nil, fmt.Errorf("inconsistent fragment sizes detected")
+		}
+	}
+
+	// Sort fragments by index
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i].FragmentIndex < fragments[j].FragmentIndex
+	})
+
+	log.Printf("Returning %d validated fragments for file %d", len(fragments), fileID)
 	return fragments, nil
 }
 
+// GetFragmentsByType retrieves fragments of a specific type
 func (m *KeyFragmentModel) GetFragmentsByType(fileID uint, holderType HolderType) ([]KeyFragment, error) {
 	var fragments []KeyFragment
+
+	log.Printf("Retrieving %s fragments for file %d", holderType, fileID)
+
 	err := m.db.Where("file_id = ? AND holder_type = ?",
 		fileID, holderType).
 		Order("fragment_index asc").
 		Find(&fragments).Error
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve key fragments: %w", err)
+		return nil, fmt.Errorf("failed to retrieve %s fragments: %w", holderType, err)
 	}
+
+	log.Printf("Found %d fragments of type %s for file %d",
+		len(fragments), holderType, fileID)
 
 	return fragments, nil
 }
 
+// GetUserFragmentsForFile retrieves only user-held fragments
 func (m *KeyFragmentModel) GetUserFragmentsForFile(fileID uint) ([]KeyFragment, error) {
-	var fragments []KeyFragment
-	err := m.db.Where("file_id = ? AND holder_type = ?", fileID, UserHolder).
-		Order("fragment_index asc").
-		Find(&fragments).Error
+	log.Printf("Retrieving user fragments for file %d", fileID)
+
+	fragments, err := m.GetFragmentsByType(fileID, UserHolder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user fragments: %w", err)
 	}
+
+	log.Printf("Retrieved %d user fragments for file %d", len(fragments), fileID)
 	return fragments, nil
 }

@@ -73,6 +73,7 @@ func NewRouteHandlers(
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
 	compressionService *services.CompressionService,
+	rsService *services.ReedSolomonService,
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
@@ -95,12 +96,12 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel),
+			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService),
 			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
-			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService),
+			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService),
 			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
-			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
+			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
 			CreateFolderController:  EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:  EndUser.NewDeleteFolderController(folderModel, activityLogModel),
@@ -110,7 +111,7 @@ func NewRouteHandlers(
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
-			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel),
+			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
 		},
 	}
 }
