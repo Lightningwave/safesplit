@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"safesplit/services"
 	"time"
 
@@ -40,45 +39,15 @@ type File struct {
 }
 
 type FileModel struct {
-	db              *gorm.DB
-	storageBasePath string
-	rsService       *services.ReedSolomonService
+	db        *gorm.DB
+	rsService *services.ReedSolomonService
 }
 
 func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService) *FileModel {
 	return &FileModel{
-		db:              db,
-		storageBasePath: filepath.Join("storage", "files"),
-		rsService:       rsService,
+		db:        db,
+		rsService: rsService,
 	}
-}
-
-// Storage management methods
-func (m *FileModel) InitializeStorage() error {
-	if err := os.MkdirAll(m.storageBasePath, 0755); err != nil {
-		return fmt.Errorf("failed to create storage directory: %w", err)
-	}
-	return nil
-}
-
-func (m *FileModel) GenerateStoragePath(fileName string) string {
-	return filepath.Join(m.storageBasePath, fileName)
-}
-
-func (m *FileModel) SaveFileContent(fileName string, content []byte) error {
-	filePath := m.GenerateStoragePath(fileName)
-	if err := os.WriteFile(filePath, content, 0600); err != nil {
-		return fmt.Errorf("failed to save file content: %w", err)
-	}
-	return nil
-}
-
-func (m *FileModel) DeleteFileContent(fileName string) error {
-	filePath := m.GenerateStoragePath(fileName)
-	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete file content: %w", err)
-	}
-	return nil
 }
 
 // File CRUD operations
@@ -102,10 +71,6 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 }
 
 func (m *FileModel) CreateFileWithShards(file *File, shares []services.KeyShare, shards [][]byte, keyFragmentModel *KeyFragmentModel) error {
-	if err := m.InitializeStorage(); err != nil {
-		return err
-	}
-
 	tx := m.db.Begin()
 	defer func() {
 		if r := recover(); r != nil {

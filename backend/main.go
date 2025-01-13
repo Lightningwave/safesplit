@@ -120,8 +120,6 @@ func main() {
 func createStorageDirectories() error {
 	// Create main storage directories
 	paths := []string{
-		"storage/encrypted",
-		"storage/files",
 		"storage/shards",
 	}
 
