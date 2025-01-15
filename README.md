@@ -78,6 +78,7 @@ go get -u gorm.io/driver/mysql
 go get -u github.com/golang-jwt/jwt/v5
 go get -u golang.org/x/crypto/bcrypt
 go get github.com/klauspost/compress/zstd
+go get github.com/klauspost/reedsolomon
 go get github.com/hashicorp/vault/shamir
 
 

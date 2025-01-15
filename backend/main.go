@@ -20,17 +20,21 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
+	// Create storage directories
+	if err := createStorageDirectories(); err != nil {
+		log.Fatal("Failed to create storage directories:", err)
+	}
+
 	// Initialize all required models
 	userModel := models.NewUserModel(db)
 	passwordHistoryModel := models.NewPasswordHistoryModel(db)
 	billingModel := models.NewBillingModel(db, userModel)
 	activityLogModel := models.NewActivityLogModel(db)
-	fileModel := models.NewFileModel(db)
+	folderModel := models.NewFolderModel(db)
 	fileShareModel := models.NewFileShareModel(db)
 	keyFragmentModel := models.NewKeyFragmentModel(db)
-	folderModel := models.NewFolderModel(db)
 
-	// Initialize services
+	// Initialize core services
 	shamirService := services.NewShamirService()
 	encryptionService := services.NewEncryptionService(shamirService)
 
@@ -40,6 +44,13 @@ func main() {
 		log.Fatal("Failed to initialize compression service:", err)
 	}
 	defer compressionService.Close()
+
+	// Initialize Reed-Solomon service with distributed storage
+	rsService, err := services.NewReedSolomonService("storage/shards", 3) // Using 3 storage nodes
+	if err != nil {
+		log.Fatal("Failed to initialize Reed-Solomon service:", err)
+	}
+	fileModel := models.NewFileModel(db, rsService)
 
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
@@ -55,6 +66,7 @@ func main() {
 		encryptionService,
 		shamirService,
 		compressionService,
+		rsService,
 	)
 
 	// Set up the Gin router with default middleware
@@ -74,11 +86,6 @@ func main() {
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 
 	router.Use(cors.New(corsConfig))
-
-	// Create storage directories
-	if err := createStorageDirectories(); err != nil {
-		log.Fatal("Failed to create storage directories:", err)
-	}
 
 	// Add debug endpoint for route verification
 	router.GET("/debug", func(c *gin.Context) {
@@ -113,8 +120,7 @@ func main() {
 func createStorageDirectories() error {
 	// Create main storage directories
 	paths := []string{
-		"storage/encrypted",
-		"storage/files", // Add this for file uploads
+		"storage/shards",
 	}
 
 	for _, path := range paths {
