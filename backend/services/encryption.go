@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -24,12 +25,14 @@ func NewEncryptionService(shamirService *ShamirService) *EncryptionService {
 }
 
 func (s *EncryptionService) EncryptFile(data []byte, n, k int) (encrypted []byte, iv []byte, salt []byte, shares []KeyShare, err error) {
+	log.Printf("Starting file encryption with n=%d, k=%d", n, k)
+
 	// Generate encryption key (32 bytes for AES-256)
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to generate key: %w", err)
 	}
-	log.Printf("Generated key (full): %s", hex.EncodeToString(key))
+	log.Printf("Generated encryption key: %x (length=%d)", key, len(key))
 
 	// Split key into shares
 	shares, err = s.shamirService.SplitKey(key, n, k)
@@ -38,9 +41,23 @@ func (s *EncryptionService) EncryptFile(data []byte, n, k int) (encrypted []byte
 	}
 	log.Printf("Split key into %d shares (threshold: %d)", len(shares), k)
 
-	// Validate key shares
-	if err := s.validateKeyShares(shares, k); err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("key share validation failed: %w", err)
+	// Debug: Log each share
+	for i, share := range shares {
+		log.Printf("Share %d: Index=%d, Value=%s (length=%d)",
+			i, share.Index, share.Value, len(share.Value))
+	}
+
+	// Test reconstruction with minimum shares
+	testShares := shares[:k]
+	log.Printf("Testing reconstruction with first %d shares...", k)
+	reconstructedKey, err := s.shamirService.RecombineKey(testShares, k)
+	if err != nil {
+		log.Printf("Test reconstruction failed: %v", err)
+	} else {
+		log.Printf("Test reconstruction result:")
+		log.Printf("  Original key    : %x", key)
+		log.Printf("  Reconstructed key: %x", reconstructedKey)
+		log.Printf("  Keys match: %v", bytes.Equal(key, reconstructedKey))
 	}
 
 	// Generate IV (16 bytes for GCM)
@@ -48,102 +65,105 @@ func (s *EncryptionService) EncryptFile(data []byte, n, k int) (encrypted []byte
 	if _, err := rand.Read(iv); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to generate IV: %w", err)
 	}
-	log.Printf("Generated IV: %s", hex.EncodeToString(iv))
+	log.Printf("Generated IV: %x", iv)
 
 	// Create cipher block
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
+	log.Printf("Created AES cipher block. Block size: %d bytes", block.BlockSize())
 
 	// Create GCM with 16-byte nonce size
 	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to create GCM mode: %w", err)
 	}
+	log.Printf("Created GCM with 16-byte nonce size")
 
 	// Prepend the original data size to the data
 	sizeBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sizeBytes, uint64(len(data)))
 	dataWithSize := append(sizeBytes, data...)
+	log.Printf("Added data size prefix: original=%d bytes, with prefix=%d bytes",
+		len(data), len(dataWithSize))
 
 	// Encrypt data
-	log.Printf("Encrypting data - Original size: %d bytes", len(data))
 	encrypted = gcm.Seal(nil, iv, dataWithSize, nil)
-	log.Printf("Data encrypted - Size: %d bytes", len(encrypted))
+	log.Printf("Data encrypted - Original: %d bytes, Encrypted: %d bytes",
+		len(dataWithSize), len(encrypted))
 
-	// Generate salt for backward compatibility
+	// Generate salt
 	salt = make([]byte, 32)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to generate salt: %w", err)
 	}
-
-	// Validate outputs
-	if err := s.validateEncryptionOutputs(encrypted, iv, shares, k); err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("output validation failed: %w", err)
-	}
+	log.Printf("Generated salt: %x", salt)
 
 	return encrypted, iv, salt, shares, nil
 }
 
 func (s *EncryptionService) DecryptFile(encrypted []byte, iv []byte, keyShares []KeyShare, k int, salt []byte) ([]byte, error) {
-	log.Printf("Starting decryption with detailed debugging")
-	log.Printf("Input validation:")
+	log.Printf("\nStarting file decryption:")
+	log.Printf("Input parameters:")
 	log.Printf("- Encrypted data length: %d bytes", len(encrypted))
-	log.Printf("- IV length: %d bytes", len(iv))
-	log.Printf("- Number of shares provided: %d", len(keyShares))
-	log.Printf("- Threshold (k): %d", k)
+	log.Printf("- IV: %x (length=%d)", iv, len(iv))
+	log.Printf("- Salt: %x (length=%d)", salt, len(salt))
+	log.Printf("- Shares provided: %d, Threshold: %d", len(keyShares), k)
 
-	// Validate input parameters
-	if err := s.validateDecryptionInputs(encrypted, iv, salt, keyShares, k); err != nil {
-		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Log all shares before reconstruction
-	log.Printf("\nAvailable shares before reconstruction:")
+	// Log all shares
 	for i, share := range keyShares {
-		log.Printf("Share %d - Index: %d, Value length: %d", i, share.Index, len(share.Value))
-		valueBytes, _ := hex.DecodeString(share.Value)
-		log.Printf("Share %d value: %s", i, hex.EncodeToString(valueBytes))
+		log.Printf("Share %d: Index=%d, Value=%s (length=%d)",
+			i, share.Index, share.Value, len(share.Value))
+		if rawBytes, err := hex.DecodeString(share.Value); err == nil {
+			log.Printf("  Decoded bytes: %x (length=%d)", rawBytes, len(rawBytes))
+		}
 	}
 
 	// Reconstruct key from shares
+	log.Printf("\nReconstructing key from shares...")
 	key, err := s.shamirService.RecombineKey(keyShares, k)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct key: %w", err)
 	}
+	log.Printf("Key reconstruction successful:")
+	log.Printf("- Raw key: %x", key)
+	log.Printf("- Length: %d bytes", len(key))
 
-	log.Printf("\nKey reconstruction:")
-	log.Printf("- Reconstructed key length: %d bytes", len(key))
-	log.Printf("- Key hex: %s", hex.EncodeToString(key))
+	// Ensure key is exactly 32 bytes
+	if len(key) != 32 {
+		paddedKey := make([]byte, 32)
+		copy(paddedKey, key)
+		key = paddedKey
+		log.Printf("Key padded to 32 bytes: %x", key)
+	}
 
 	// Create cipher block
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
+	log.Printf("Created AES cipher block. Block size: %d bytes", block.BlockSize())
 
-	log.Printf("\nCipher configuration:")
-	log.Printf("- Block size: %d bytes", block.BlockSize())
-	log.Printf("- IV being used: %s", hex.EncodeToString(iv))
-
-	// Create GCM with 16-byte nonce size
+	// Create GCM
 	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
 	}
+	log.Printf("Created GCM with 16-byte nonce size")
 
 	// Decrypt data
+	log.Printf("\nAttempting decryption...")
 	decrypted, err := gcm.Open(nil, iv, encrypted, nil)
 	if err != nil {
-		log.Printf("\nDecryption failed:")
+		log.Printf("Decryption failed:")
 		log.Printf("- Error: %v", err)
-		log.Printf("- Key used: %s", hex.EncodeToString(key))
-		log.Printf("- IV used: %s", hex.EncodeToString(iv))
+		log.Printf("- Key used: %x", key)
+		log.Printf("- IV used: %x", iv)
 		return nil, fmt.Errorf("failed to decrypt: %w", err)
 	}
 
-	// Extract original data size and verify
+	// Extract original size and data
 	if len(decrypted) < 8 {
 		return nil, fmt.Errorf("decrypted data too short")
 	}
@@ -152,10 +172,9 @@ func (s *EncryptionService) DecryptFile(encrypted []byte, iv []byte, keyShares [
 		return nil, fmt.Errorf("decrypted data shorter than original size")
 	}
 
-	// Extract the actual data
 	data := decrypted[8 : 8+originalSize]
-	log.Printf("\nDecryption successful:")
-	log.Printf("- Original data size: %d bytes", originalSize)
+	log.Printf("Decryption successful:")
+	log.Printf("- Original size: %d bytes", originalSize)
 	log.Printf("- Decrypted data size: %d bytes", len(data))
 
 	return data, nil

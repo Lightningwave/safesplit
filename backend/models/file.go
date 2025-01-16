@@ -27,6 +27,8 @@ type File struct {
 	DeletedAt        *time.Time `json:"deleted_at"`
 	EncryptionIV     []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
 	EncryptionSalt   []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
+	ServerKeyID      string     `json:"server_key_id" gorm:"type:varchar(64)"` 
+    MasterKeyVersion int        `json:"master_key_version" gorm:"not null;default:1"`
 	FileHash         string     `json:"file_hash"`
 	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
 	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
@@ -39,15 +41,17 @@ type File struct {
 }
 
 type FileModel struct {
-	db        *gorm.DB
-	rsService *services.ReedSolomonService
+    db             *gorm.DB
+    rsService      *services.ReedSolomonService
+    serverKeyModel *ServerMasterKeyModel
 }
 
-func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService) *FileModel {
-	return &FileModel{
-		db:        db,
-		rsService: rsService,
-	}
+func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService, serverKeyModel *ServerMasterKeyModel) *FileModel {
+    return &FileModel{
+        db:             db,
+        rsService:      rsService,
+        serverKeyModel: serverKeyModel,
+    }
 }
 
 // File CRUD operations
@@ -70,81 +74,99 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 	return nil
 }
 
-func (m *FileModel) CreateFileWithShards(file *File, shares []services.KeyShare, shards [][]byte, keyFragmentModel *KeyFragmentModel) error {
-	tx := m.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+func (m *FileModel) CreateFileWithShards(
+    file *File, 
+    shares []services.KeyShare, 
+    shards [][]byte, 
+    keyFragmentModel *KeyFragmentModel,
+    serverKeyModel *ServerMasterKeyModel,
+) error {
+    tx := m.db.Begin()
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
 
-	// Verify folder if provided
-	if file.FolderID != nil {
-		var folder Folder
-		if err := tx.Where("id = ? AND user_id = ? AND is_archived = ?",
-			file.FolderID, file.UserID, false).First(&folder).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("invalid folder: %w", err)
-		}
-	}
+    // Verify folder if provided
+    if file.FolderID != nil {
+        var folder Folder
+        if err := tx.Where("id = ? AND user_id = ? AND is_archived = ?",
+            file.FolderID, file.UserID, false).First(&folder).Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("invalid folder: %w", err)
+        }
+    }
 
-	// Create file record
-	if err := m.CreateFile(tx, file); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create file record: %w", err)
-	}
+    // Create file record
+    if err := m.CreateFile(tx, file); err != nil {
+        tx.Rollback()
+        return fmt.Errorf("failed to create file record: %w", err)
+    }
 
-	// Store the Reed-Solomon shards
-	if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to store shards: %w", err)
-	}
+    // Store the Reed-Solomon shards
+    if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
+        tx.Rollback()
+        return fmt.Errorf("failed to store shards: %w", err)
+    }
 
-	// Save key fragments
-	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares); err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to save key fragments: %w", err)
-	}
+    // Save key fragments - passing userID and serverKeyModel
+    if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
+        // Clean up stored shards on failure
+        m.rsService.DeleteShards(file.ID)
+        tx.Rollback()
+        return fmt.Errorf("failed to save key fragments: %w", err)
+    }
 
-	// Update user storage
-	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to update storage usage: %w", err)
-	}
+    // Update user storage
+    if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+        // Clean up stored shards on failure
+        m.rsService.DeleteShards(file.ID)
+        tx.Rollback()
+        return fmt.Errorf("failed to update storage usage: %w", err)
+    }
 
-	if err := tx.Commit().Error; err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+    if err := tx.Commit().Error; err != nil {
+        // Clean up stored shards on failure
+        m.rsService.DeleteShards(file.ID)
+        return fmt.Errorf("failed to commit transaction: %w", err)
+    }
 
-	return nil
+    return nil
 }
 
 // ReadFileShards retrieves and reconstructs the file content from shards
 func (m *FileModel) ReadFileShards(file *File) ([]byte, error) {
-	// Retrieve all available shards
-	fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve shards: %w", err)
-	}
+    // Get server master key for decryption
+    masterKey, err := m.serverKeyModel.GetServerKey(file.ServerKeyID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get server key: %w", err)
+    }
 
-	// Validate we have enough shards for reconstruction
-	if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
-		return nil, fmt.Errorf("insufficient shards available for reconstruction")
-	}
+    // Retrieve all available shards
+    fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
+    if err != nil {
+        return nil, fmt.Errorf("failed to retrieve shards: %w", err)
+    }
 
-	// Reconstruct the original data
-	reconstructed, err := m.rsService.ReconstructFile(fileShards.Shards, int(file.DataShardCount), int(file.ParityShardCount))
-	if err != nil {
-		return nil, fmt.Errorf("failed to reconstruct file: %w", err)
-	}
+    // Validate we have enough shards for reconstruction
+    if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
+        return nil, fmt.Errorf("insufficient shards available for reconstruction")
+    }
 
-	return reconstructed, nil
+    // Reconstruct the original data
+    reconstructed, err := m.rsService.ReconstructFile(fileShards.Shards, int(file.DataShardCount), int(file.ParityShardCount))
+    if err != nil {
+        return nil, fmt.Errorf("failed to reconstruct file: %w", err)
+    }
+
+    // Decrypt the reconstructed data with the server master key
+    decrypted, err := services.DecryptMasterKey(reconstructed, masterKey, file.EncryptionIV)
+    if err != nil {
+        return nil, fmt.Errorf("failed to decrypt reconstructed data: %w", err)
+    }
+
+    return decrypted, nil
 }
 
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {

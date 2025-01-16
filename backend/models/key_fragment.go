@@ -1,9 +1,11 @@
 package models
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"safesplit/services"
+	"safesplit/utils"
 	"sort"
 	"time"
 
@@ -14,7 +16,7 @@ type HolderType string
 
 const (
 	UserHolder   HolderType = "user"
-	SystemHolder HolderType = "system"
+	ServerHolder HolderType = "server"
 )
 
 type KeyFragment struct {
@@ -22,7 +24,10 @@ type KeyFragment struct {
 	FileID            uint       `json:"file_id"`
 	FragmentIndex     int        `json:"fragment_index"`
 	EncryptedFragment []byte     `json:"encrypted_fragment" gorm:"type:mediumblob"`
-	HolderType        HolderType `json:"holder_type" gorm:"type:varchar(50)"`
+	EncryptionNonce   []byte     `json:"encryption_nonce" gorm:"type:binary(16)"`
+	HolderType        HolderType `json:"holder_type" gorm:"type:enum('user','server')"`
+	MasterKeyVersion  *int       `json:"master_key_version"`
+	ServerKeyID       *string    `json:"server_key_id"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
@@ -34,56 +39,120 @@ func NewKeyFragmentModel(db *gorm.DB) *KeyFragmentModel {
 	return &KeyFragmentModel{db: db}
 }
 
-// SaveKeyFragments stores fragments with proper distribution between system and user
-func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []services.KeyShare) error {
-	// Get file threshold
-	var threshold uint
+// SaveKeyFragments stores fragments with proper distribution and encryption details
+func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []services.KeyShare, userID uint, serverKeyModel *ServerMasterKeyModel) error {
+	// Get server key
+	serverKey, err := serverKeyModel.GetActive()
+	if err != nil {
+		return fmt.Errorf("failed to get server key: %w", err)
+	}
+
+	decryptedServerKey, err := serverKeyModel.GetServerKey(serverKey.KeyID)
+	if err != nil {
+		return fmt.Errorf("failed to get decrypted server key: %w", err)
+	}
+
+	log.Printf("Number of shares to save: %d", len(shares))
+	for i, share := range shares {
+		log.Printf("Share %d: Index=%d, Value=%s, Length=%d bytes",
+			i, share.Index, share.Value, len(share.Value))
+	}
+
+	// Get file info
+	var file struct {
+		Threshold        uint
+		MasterKeyVersion int
+		ServerKeyID      string
+	}
 	if err := tx.Table("files").
-		Select("threshold").
+		Select("threshold, master_key_version, server_key_id").
 		Where("id = ?", fileID).
-		Scan(&threshold).Error; err != nil {
-		return fmt.Errorf("failed to get file threshold: %w", err)
+		Scan(&file).Error; err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
 	}
 
-	log.Printf("Saving key fragments for file %d - Total shares: %d, Threshold: %d",
-		fileID, len(shares), threshold)
-
-	// Validate share count
-	if len(shares) < int(threshold) {
-		return fmt.Errorf("insufficient shares: have %d, need %d", len(shares), threshold)
-	}
-
-	// System stores threshold-1 fragments
-	systemFragmentCount := int(threshold) - 1
+	// Server stores threshold-1 fragments
+	serverFragmentCount := int(file.Threshold) - 1
 	fragments := make([]KeyFragment, len(shares))
 
+	log.Printf("Server will store %d fragments", serverFragmentCount)
+
 	for i, share := range shares {
-		holderType := UserHolder
-		if i < systemFragmentCount {
-			holderType = SystemHolder
+		isServerFragment := i < serverFragmentCount
+		holderType := ServerHolder
+		if !isServerFragment {
+			holderType = UserHolder
 		}
 
-		fragments[i] = KeyFragment{
+		// Generate nonce
+		nonce, err := utils.GenerateNonce()
+		if err != nil {
+			return fmt.Errorf("failed to generate nonce for fragment %d: %w", i, err)
+		}
+
+		// Convert share to bytes without truncating
+		shareBytes, err := hex.DecodeString(share.Value)
+		if err != nil {
+			return fmt.Errorf("failed to decode share value: %w", err)
+		}
+
+		log.Printf("Fragment %d: Type=%s, Share bytes=%x (length=%d)",
+			i, holderType, shareBytes, len(shareBytes))
+
+		// Encrypt fragment
+		var encryptedFragment []byte
+
+		if isServerFragment {
+			log.Printf("Using server key (length: %d) to encrypt fragment %d",
+				len(decryptedServerKey), i)
+			encryptedFragment, err = services.EncryptMasterKey(shareBytes, decryptedServerKey, nonce)
+		} else {
+			var user User
+			if err := tx.First(&user, userID).Error; err != nil {
+				return fmt.Errorf("failed to get user info: %w", err)
+			}
+
+			log.Printf("User master key length: %d bytes", len(user.EncryptedMasterKey))
+			log.Printf("User master key version: %d", user.MasterKeyVersion)
+
+			// Take first 32 bytes of user's master key
+			userKey := user.EncryptedMasterKey[:32]
+			log.Printf("Using truncated user master key (length: %d) to encrypt fragment %d",
+				len(userKey), i)
+
+			encryptedFragment, err = services.EncryptMasterKey(shareBytes, userKey, nonce)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to encrypt fragment %d: %w", i, err)
+		}
+
+		fragment := KeyFragment{
 			FileID:            fileID,
 			FragmentIndex:     share.Index,
-			EncryptedFragment: []byte(share.Value),
+			EncryptedFragment: encryptedFragment,
+			EncryptionNonce:   nonce,
 			HolderType:        holderType,
 		}
-		log.Printf("Creating fragment %d - Index: %d, Type: %s, Length: %d",
-			i, share.Index, holderType, len(share.Value))
+
+		if isServerFragment {
+			fragment.ServerKeyID = &serverKey.KeyID
+			fragment.MasterKeyVersion = nil
+		} else {
+			fragment.ServerKeyID = nil
+			fragment.MasterKeyVersion = &file.MasterKeyVersion
+		}
+
+		fragments[i] = fragment
+		log.Printf("Created fragment %d - Index: %d, Type: %s, Length: %d bytes, Value=%x",
+			i, share.Index, holderType, len(encryptedFragment), encryptedFragment)
 	}
 
-	// Save fragments in transaction
+	// Save fragments
 	result := tx.Create(&fragments)
 	if result.Error != nil {
 		return fmt.Errorf("failed to save key fragments: %w", result.Error)
 	}
-	if result.RowsAffected != int64(len(fragments)) {
-		return fmt.Errorf("failed to save all fragments: saved %d of %d",
-			result.RowsAffected, len(fragments))
-	}
-
-	log.Printf("Successfully saved %d key fragments for file %d", len(fragments), fileID)
 	return nil
 }
 
@@ -119,12 +188,12 @@ func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]KeyFragment, error) {
 	}
 
 	// Count fragments by type
-	systemCount := 0
+	serverCount := 0
 	userCount := 0
 	fragmentSizes := make(map[int]int)
 	for _, f := range fragments {
-		if f.HolderType == SystemHolder {
-			systemCount++
+		if f.HolderType == ServerHolder {
+			serverCount++
 		} else {
 			userCount++
 		}
@@ -133,8 +202,8 @@ func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]KeyFragment, error) {
 			f.FragmentIndex, f.HolderType, len(f.EncryptedFragment))
 	}
 
-	log.Printf("Retrieved %d total fragments (System: %d, User: %d) for file %d",
-		len(fragments), systemCount, userCount, fileID)
+	log.Printf("Retrieved %d total fragments (Server: %d, User: %d) for file %d",
+		len(fragments), serverCount, userCount, fileID)
 
 	// Validate fragment count
 	if len(fragments) < int(file.Threshold) {
@@ -193,5 +262,18 @@ func (m *KeyFragmentModel) GetUserFragmentsForFile(fileID uint) ([]KeyFragment, 
 	}
 
 	log.Printf("Retrieved %d user fragments for file %d", len(fragments), fileID)
+	return fragments, nil
+}
+
+// GetServerFragmentsForFile retrieves only server-held fragments
+func (m *KeyFragmentModel) GetServerFragmentsForFile(fileID uint) ([]KeyFragment, error) {
+	log.Printf("Retrieving server fragments for file %d", fileID)
+
+	fragments, err := m.GetFragmentsByType(fileID, ServerHolder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve server fragments: %w", err)
+	}
+
+	log.Printf("Retrieved %d server fragments for file %d", len(fragments), fileID)
 	return fragments, nil
 }

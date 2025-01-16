@@ -3,6 +3,8 @@ package models
 import (
 	"errors"
 	"fmt"
+	"safesplit/services"
+	"safesplit/utils"
 	"strconv"
 	"time"
 
@@ -51,12 +53,17 @@ type User struct {
 	Username            string     `json:"username" gorm:"unique;not null"`
 	Email               string     `json:"email" gorm:"unique;not null"`
 	Password            string     `json:"-" gorm:"not null"`
+	MasterKeySalt       []byte     `json:"-" gorm:"type:binary(32);not null"`
+	MasterKeyNonce      []byte     `json:"-" gorm:"type:binary(16);not null"`
+	EncryptedMasterKey  []byte     `json:"-" gorm:"type:binary(64);not null"`
+	MasterKeyVersion    int        `json:"-" gorm:"not null;default:1"`
+	KeyLastRotated      *time.Time `json:"-"`
 	Role                string     `json:"role" gorm:"type:enum('end_user','premium_user','sys_admin','super_admin');default:'end_user'"`
 	ReadAccess          bool       `json:"read_access" gorm:"default:true"`
 	WriteAccess         bool       `json:"write_access" gorm:"default:true"`
 	TwoFactorEnabled    bool       `json:"two_factor_enabled" gorm:"default:false"`
 	TwoFactorSecret     string     `json:"-" gorm:"column:two_factor_secret"`
-	StorageQuota        int64      `json:"storage_quota" gorm:"default:5368709120"`
+	StorageQuota        int64      `json:"storage_quota" gorm:"default:5368709120"` // 5GB default
 	StorageUsed         int64      `json:"storage_used" gorm:"default:0"`
 	SubscriptionStatus  string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
 	IsActive            bool       `json:"is_active" gorm:"default:true"`
@@ -77,22 +84,97 @@ func NewUserModel(db *gorm.DB) *UserModel {
 	return &UserModel{db: db}
 }
 
-// BeforeCreate hook to hash password before saving
+// BeforeCreate hook to set up user security fields
+// BeforeCreate hook to set up user security fields
 func (u *User) BeforeCreate(tx *gorm.DB) error {
+	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 	u.Password = string(hashedPassword)
+
+	// Generate master key
+	masterKey, err := services.GenerateMasterKey()
+	if err != nil {
+		return fmt.Errorf("failed to generate master key: %w", err)
+	}
+
+	// Generate salt
+	salt, err := utils.GenerateSalt()
+	if err != nil {
+		return fmt.Errorf("failed to generate salt: %w", err)
+	}
+	u.MasterKeySalt = salt
+
+	// Generate nonce
+	nonce, err := utils.GenerateNonce()
+	if err != nil {
+		return fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	u.MasterKeyNonce = nonce
+
+	// Derive key encryption key from password using salt
+	kek, err := services.DeriveKeyEncryptionKey(u.Password, salt)
+	if err != nil {
+		return fmt.Errorf("failed to derive key encryption key: %w", err)
+	}
+
+	// Encrypt master key
+	encryptedKey, err := services.EncryptMasterKey(masterKey, kek, nonce)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt master key: %w", err)
+	}
+
+	// Set encrypted master key and version
+	u.EncryptedMasterKey = encryptedKey
+	u.MasterKeyVersion = 1
+
 	return nil
 }
 
-// Create creates a new user in the database
+// Create creates a new user with master key generation
 func (m *UserModel) Create(user *User) (*User, error) {
-	if err := m.db.Create(user).Error; err != nil {
+	var createdUser *User
+	err := m.db.Transaction(func(tx *gorm.DB) error {
+		// Generate salt and nonce (BeforeCreate hook will handle this)
+		if err := tx.Create(user).Error; err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
+
+		// Generate and encrypt master key using password
+		masterKey, err := services.GenerateMasterKey()
+		if err != nil {
+			return fmt.Errorf("failed to generate master key: %w", err)
+		}
+
+		// Derive key encryption key from password using salt
+		kek, err := services.DeriveKeyEncryptionKey(user.Password, user.MasterKeySalt)
+		if err != nil {
+			return fmt.Errorf("failed to derive key encryption key: %w", err)
+		}
+
+		// Encrypt master key
+		encryptedKey, err := services.EncryptMasterKey(masterKey, kek, user.MasterKeyNonce)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt master key: %w", err)
+		}
+
+		// Update user with encrypted master key
+		user.EncryptedMasterKey = encryptedKey
+		if err := tx.Save(user).Error; err != nil {
+			return fmt.Errorf("failed to save encrypted master key: %w", err)
+		}
+
+		createdUser = user
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-	return user, nil
+
+	return createdUser, nil
 }
 
 // Authenticate checks the provided email and password
@@ -149,6 +231,74 @@ func (m *UserModel) handleFailedLogin(user *User) error {
 
 	return m.db.Save(user).Error
 }
+
+// UpdateMasterKey updates the user's master key material
+func (u *User) UpdateMasterKey(db *gorm.DB, newEncryptedKey []byte) error {
+	if len(newEncryptedKey) != 64 {
+		return errors.New("invalid master key length")
+	}
+
+	// Generate new nonce
+	nonce, err := utils.GenerateNonce()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"encrypted_master_key": newEncryptedKey,
+		"master_key_nonce":     nonce,
+		"master_key_version":   u.MasterKeyVersion + 1,
+		"key_last_rotated":     now,
+	}
+
+	if err := db.Model(u).Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update master key: %w", err)
+	}
+
+	// Update local struct
+	u.EncryptedMasterKey = newEncryptedKey
+	u.MasterKeyNonce = nonce
+	u.MasterKeyVersion++
+	u.KeyLastRotated = &now
+
+	return nil
+}
+
+// RotateMasterKey performs a key rotation operation
+func (m *UserModel) RotateMasterKey(userID uint, newEncryptedKey []byte, rotationType RotationType, keyRotationModel *KeyRotationModel) error {
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		// Get user and verify existence
+		var user User
+		if err := tx.First(&user, userID).Error; err != nil {
+			return fmt.Errorf("user not found: %w", err)
+		}
+
+		// Verify rotation type is valid
+		switch rotationType {
+		case RotationTypeAutomatic, RotationTypeManual, RotationTypeForced, RotationTypePassword:
+			// Valid rotation type
+		default:
+			return fmt.Errorf("invalid rotation type: %s", rotationType)
+		}
+
+		// Store old version for logging
+		oldVersion := user.MasterKeyVersion
+
+		// Update the master key
+		if err := user.UpdateMasterKey(tx, newEncryptedKey); err != nil {
+			return fmt.Errorf("failed to update master key: %w", err)
+		}
+
+		// Log the rotation using the KeyRotationModel
+		if err := keyRotationModel.LogRotation(userID, oldVersion, user.MasterKeyVersion, rotationType); err != nil {
+			return fmt.Errorf("failed to log rotation: %w", err)
+		}
+
+		return nil
+	})
+}
+
 func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error) {
 	var user User
 	if err := m.db.Where("email = ? AND is_active = ? AND role = ?",
@@ -163,24 +313,13 @@ func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		// Increment failed attempts and possibly lock account
 		if err := m.handleFailedLogin(&user); err != nil {
 			return nil, err
 		}
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Reset failed attempts on successful login
-	user.FailedLoginAttempts = 0
-	user.AccountLockedUntil = nil
-	now := time.Now()
-	user.LastLogin = &now
-
-	if err := m.db.Save(&user).Error; err != nil {
-		return nil, err
-	}
-
-	return &user, nil
+	return m.handleSuccessfulLogin(&user)
 }
 
 // FindByEmail retrieves a user by their email
@@ -241,50 +380,64 @@ func (u *User) UpdateSubscription(db *gorm.DB, status string) error {
 	return db.Save(u).Error
 }
 
-// DeactivateAccount deactivates the user account
-func (u *User) DeactivateAccount(db *gorm.DB) error {
-	u.IsActive = false
-	return db.Save(u).Error
-}
-
-// ReactivateAccount reactivates the user account
-func (u *User) ReactivateAccount(db *gorm.DB) error {
-	u.IsActive = true
-	return db.Save(u).Error
-}
-
-// ChangePassword updates the user's password
-func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword string, passwordHistoryModel *PasswordHistoryModel) error {
-	var user User
-	if err := m.db.First(&user, userID).Error; err != nil {
-		return errors.New("user not found")
-	}
-
-	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
-		return errors.New("current password is incorrect")
-	}
-
-	// Generate new password hash
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
+// ResetPassword updates the user's password and optionally rotates master key
+func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword string, newEncryptedMasterKey []byte, passwordHistoryModel *PasswordHistoryModel) error {
 	return m.db.Transaction(func(tx *gorm.DB) error {
-		// Store the old password in history if it exists
-		if user.Password != "" {
-			if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+		var user User
+		if err := tx.First(&user, userID).Error; err != nil {
+			return errors.New("user not found")
+		}
+
+		// Verify current password
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
+			return errors.New("current password is incorrect")
+		}
+
+		// Generate new password hash
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+
+		// Store the old password in history
+		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+			return err
+		}
+
+		// Update password and related fields
+		now := time.Now()
+		updates := map[string]interface{}{
+			"password":              string(hashedPassword),
+			"last_password_change":  now,
+			"force_password_change": false,
+		}
+
+		// Update master key if provided
+		if newEncryptedMasterKey != nil && len(newEncryptedMasterKey) > 0 {
+			nonce, err := utils.GenerateNonce()
+			if err != nil {
 				return err
+			}
+
+			updates["encrypted_master_key"] = newEncryptedMasterKey
+			updates["master_key_nonce"] = nonce
+			updates["master_key_version"] = user.MasterKeyVersion + 1
+			updates["key_last_rotated"] = now
+
+			// Log key rotation
+			rotation := KeyRotationHistory{
+				UserID:        userID,
+				OldKeyVersion: user.MasterKeyVersion,
+				NewKeyVersion: user.MasterKeyVersion + 1,
+				RotationType:  "password_change",
+			}
+
+			if err := tx.Create(&rotation).Error; err != nil {
+				return fmt.Errorf("failed to log key rotation: %w", err)
 			}
 		}
 
-		// Update the user's password
-		user.Password = string(hashedPassword)
-		user.LastPasswordChange = time.Now()
-		user.ForcePasswordChange = false
-
-		return tx.Save(&user).Error
+		return tx.Model(&user).Updates(updates).Error
 	})
 }
 
@@ -394,8 +547,8 @@ func (m *UserModel) DeleteUser(sysAdmin *User, userID uint) error {
 		return errors.New("cannot delete administrator accounts")
 	}
 
-	if err := user.DeactivateAccount(m.db); err != nil {
-		return fmt.Errorf("failed to delete user account: %v", err)
+	if err := m.DeactivateAccount(userID); err != nil {
+		return fmt.Errorf("failed to delete user account: %w", err)
 	}
 
 	return nil
@@ -450,6 +603,40 @@ func (m *UserModel) GetStorageStats() (*StorageStats, error) {
 	return &stats, nil
 }
 
+// DeactivateAccount deactivates the user account
+func (m *UserModel) DeactivateAccount(userID uint) error {
+	result := m.db.Model(&User{}).
+		Where("id = ?", userID).
+		Update("is_active", false)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to deactivate account: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("user not found or already deactivated")
+	}
+
+	return nil
+}
+
+// ReactivateAccount reactivates the user account
+func (m *UserModel) ReactivateAccount(userID uint) error {
+	result := m.db.Model(&User{}).
+		Where("id = ?", userID).
+		Update("is_active", true)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to reactivate account: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("user not found or already active")
+	}
+
+	return nil
+}
+
 // GetDeletedUsers retrieves all deleted user accounts
 func (m *UserModel) GetDeletedUsers(sysAdmin *User) ([]*User, error) {
 	if !sysAdmin.IsSysAdmin() && !sysAdmin.IsSuperAdmin() {
@@ -485,7 +672,7 @@ func (m *UserModel) RestoreUser(sysAdmin *User, userID uint) error {
 		return errors.New("cannot restore administrator accounts")
 	}
 
-	return user.ReactivateAccount(m.db)
+	return m.ReactivateAccount(userID)
 }
 
 // UpdateUserAccount updates a user's account information and privileges
