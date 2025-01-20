@@ -104,7 +104,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 
     // Encrypt fragment for sharing
     encryptedFragment, err := c.encryptionService.EncryptKeyFragment(
-        fragments[0].EncryptedFragment,
+        fragments[0].Data,
         []byte(req.Password),
     )
     if err != nil {
@@ -223,7 +223,7 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
         } else {
             shares[i] = services.KeyShare{
                 Index: fragment.FragmentIndex,
-                Value: string(fragment.EncryptedFragment),
+                Value: string(fragment.Data),
             }
         }
     }

@@ -140,19 +140,17 @@ CREATE TABLE files (
 -- Key fragments table
 CREATE TABLE key_fragments (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    file_id INT NOT NULL,                         -- Associated file
-    fragment_index INT NOT NULL,                  -- Fragment sequence position
-    encrypted_fragment MEDIUMBLOB NOT NULL,       -- Encrypted key fragment
-    encryption_nonce BINARY(16) NOT NULL,         -- Nonce for fragment encryption
-    holder_type ENUM('user', 'server') NOT NULL,  -- Whether fragment belongs to user or server
-    master_key_version INT,                       -- Version of user's master key (for user fragments)
-    server_key_id VARCHAR(64),                    -- ID of server key (for server fragments)
+    file_id INT NOT NULL,
+    fragment_index INT NOT NULL,                    -- Shamir share index (1-255)
+    fragment_path VARCHAR(1024) NOT NULL,           -- Path in node storage
+    node_index INT NOT NULL,                        -- Which node stores this fragment
+    encryption_nonce BINARY(16) NOT NULL,           -- GCM nonce
+    holder_type ENUM('user', 'server') NOT NULL,    -- Whether server or user holds this fragment
+    master_key_version INT,                         -- Version of master key used (for user fragments)
+    server_key_id VARCHAR(64),                      -- Server key ID (for server fragments)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_fragment (file_id, fragment_index),
-    INDEX idx_key_fragment_holder (holder_type),
-    INDEX idx_key_fragment_master_version (master_key_version),
-    INDEX idx_key_fragment_server_key (server_key_id)
+    UNIQUE KEY unique_fragment (file_id, fragment_index)    
 );
 
 -- File shares table

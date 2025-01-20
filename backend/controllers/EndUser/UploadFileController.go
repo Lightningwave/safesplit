@@ -11,6 +11,7 @@ import (
 	"safesplit/models"
 	"safesplit/services"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -289,8 +290,24 @@ func (c *UploadFileController) processFileUpload(
 	log.Printf("Compressed data - Original: %d, Compressed: %d bytes, Ratio: %.2f%%",
 		len(content), len(compressed), ratio*100)
 
+	// Get active server key
+	serverKey, err := c.serverKeyModel.GetActive()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server key: %w", err)
+	}
+
+	// Generate a temporary file ID for encryption
+	// This will be replaced with the actual file ID after database insertion
+	tempFileID := uint(time.Now().UnixNano())
+
 	// Encrypt the compressed content
-	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(compressed, n, k)
+	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(
+		compressed,
+		n,
+		k,
+		tempFileID,
+		serverKey.KeyID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
@@ -308,16 +325,6 @@ func (c *UploadFileController) processFileUpload(
 		return nil, fmt.Errorf("reed-solomon encoding failed: %w", err)
 	}
 	log.Printf("Created %d shards", len(fileShards.Shards))
-
-	// Verify shard sizes
-	shardSize := len(fileShards.Shards[0])
-	for i, shard := range fileShards.Shards {
-		if len(shard) != shardSize {
-			return nil, fmt.Errorf("inconsistent shard size at index %d: got %d, want %d",
-				i, len(shard), shardSize)
-		}
-		log.Printf("Shard %d size: %d bytes", i, len(shard))
-	}
 
 	return &processedFile{
 		compressed: compressed,

@@ -17,10 +17,10 @@ type FileShards struct {
     OriginalSize uint64
 }
 
-func NewReedSolomonService(basePath string, nodeCount int) (*ReedSolomonService, error) {
-    storage, err := NewDistributedStorageService(basePath, nodeCount)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create storage service: %w", err)
+// Updated constructor to accept an existing storage service
+func NewReedSolomonService(storage *DistributedStorageService) (*ReedSolomonService, error) {
+    if storage == nil {
+        return nil, fmt.Errorf("storage service cannot be nil")
     }
 
     return &ReedSolomonService{
@@ -80,6 +80,8 @@ func (s *ReedSolomonService) SplitFile(data []byte, dataShards, parityShards int
         return nil, fmt.Errorf("failed to encode shards: %w", err)
     }
 
+    log.Printf("Created %d shards", len(shards))
+
     return &FileShards{
         Shards:       shards,
         OriginalSize: originalSize,
@@ -126,10 +128,12 @@ func (s *ReedSolomonService) ReconstructFile(shards [][]byte, dataShards, parity
 }
 
 func (s *ReedSolomonService) StoreShards(fileID uint, fileShards *FileShards) error {
+    log.Printf("Storing %d shards for file %d", len(fileShards.Shards), fileID)
     return s.storage.StoreShards(fileID, fileShards.Shards)
 }
 
 func (s *ReedSolomonService) RetrieveShards(fileID uint, totalShards int) (*FileShards, error) {
+    log.Printf("Retrieving %d shards for file %d", totalShards, fileID)
     shards, err := s.storage.RetrieveShards(fileID, totalShards)
     if err != nil {
         return nil, err
@@ -154,6 +158,7 @@ func (s *ReedSolomonService) ValidateShards(shards [][]byte, dataShards int) boo
 
     for i, shard := range shards {
         if shard == nil {
+            log.Printf("Shard %d: Missing", i)
             continue
         }
 
@@ -178,5 +183,6 @@ func (s *ReedSolomonService) ValidateShards(shards [][]byte, dataShards int) boo
 }
 
 func (s *ReedSolomonService) DeleteShards(fileID uint) error {
+    log.Printf("Deleting shards for file %d", fileID)
     return s.storage.DeleteShards(fileID)
 }

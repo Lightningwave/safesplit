@@ -187,6 +187,7 @@ func (c *DownloadFileController) validateFileMetadata(file *models.File) error {
 	return nil
 }
 
+// In getKeyShares method:
 func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.File) ([]services.KeyShare, error) {
 	log.Printf("Retrieving key fragments for file %d - Threshold: %d, Expected shares: %d",
 		file.ID, file.Threshold, file.ShareCount)
@@ -213,12 +214,13 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 		return nil, err
 	}
 
-	// Get user's master key
+	// Get user
 	currentUser, err := c.getCurrentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// Get fragments with their data
 	fragments, err := c.keyFragmentModel.GetKeyFragments(file.ID)
 	if err != nil {
 		log.Printf("Failed to retrieve key fragments: %v", err)
@@ -236,20 +238,23 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 		var decryptedFragment []byte
 
 		// Decrypt fragment based on its holder type
-		if fragment.HolderType == models.ServerHolder {
+		if fragment.KeyFragment.HolderType == models.ServerHolder {
+			log.Printf("Decrypting server fragment %d with server key", i)
 			decryptedFragment, err = services.DecryptMasterKey(
-				fragment.EncryptedFragment,
+				fragment.Data,
 				serverKeyData,
-				fragment.EncryptionNonce[:12],
+				fragment.KeyFragment.EncryptionNonce[:12],
 			)
 		} else {
-			userKey := currentUser.EncryptedMasterKey[:32]
+			log.Printf("Decrypting user fragment %d with user master key", i)
+			userMasterKey := currentUser.EncryptedMasterKey[:32]
 			decryptedFragment, err = services.DecryptMasterKey(
-				fragment.EncryptedFragment,
-				userKey,
-				fragment.EncryptionNonce[:12],
+				fragment.Data,
+				userMasterKey,
+				fragment.KeyFragment.EncryptionNonce[:12],
 			)
 		}
+
 		if err != nil {
 			log.Printf("Failed to decrypt fragment %d: %v", i, err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -259,7 +264,7 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 			return nil, err
 		}
 
-		// Normalize to 32 bytes first
+		// Normalize to 32 bytes
 		normalizedFragment := make([]byte, 32)
 		copy(normalizedFragment, decryptedFragment)
 
@@ -268,33 +273,39 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 
 		// Convert to hex string to match encryption format
 		shares[i] = services.KeyShare{
-			Index: fragment.FragmentIndex,
-			Value: hex.EncodeToString(normalizedFragment), // Convert to hex string
+			Index:        fragment.KeyFragment.FragmentIndex,
+			Value:        hex.EncodeToString(normalizedFragment),
+			NodeIndex:    fragment.KeyFragment.NodeIndex,
+			FragmentPath: fragment.KeyFragment.FragmentPath,
 		}
 
-		log.Printf("Fragment %d normalized: Index=%d, Length=%d, Bytes=%x, HexValue=%s",
-			i, fragment.FragmentIndex, len(normalizedFragment),
-			normalizedFragment, shares[i].Value)
+		log.Printf("Fragment %d normalized: Index=%d, Node=%d, Path=%s, Length=%d, Bytes=%x, HexValue=%s",
+			i, shares[i].Index, shares[i].NodeIndex, shares[i].FragmentPath,
+			len(normalizedFragment), normalizedFragment, shares[i].Value)
 	}
 
 	return shares, nil
 }
 func (c *DownloadFileController) getFileData(ctx *gin.Context, file *models.File) ([]byte, error) {
+	log.Printf("Getting file data for file ID: %d", file.ID)
+
 	if file.IsSharded {
-		log.Printf("Retrieving sharded file data for ID: %d", file.ID)
+		// Handle sharded files using Reed-Solomon
 		return c.getShardedData(ctx, file)
 	}
 
-	log.Printf("Reading file from path: %s", file.FilePath)
+	// Handle regular files
 	data, err := os.ReadFile(file.FilePath)
 	if err != nil {
-		log.Printf("Failed to read file: %v", err)
+		log.Printf("Failed to read file from disk: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "Failed to read file",
+			"error":  "Failed to read file data",
 		})
 		return nil, err
 	}
+
+	log.Printf("Successfully read file data - Size: %d bytes", len(data))
 	return data, nil
 }
 

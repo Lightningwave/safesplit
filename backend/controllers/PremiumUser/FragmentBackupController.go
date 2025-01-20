@@ -77,7 +77,7 @@ func (c *FragmentController) GetUserFragments(ctx *gin.Context) {
 	for i, fragment := range fragments {
 		response[i] = gin.H{
 			"index": fragment.FragmentIndex,
-			"value": string(fragment.EncryptedFragment),
+			"value": string(fragment.Data),
 		}
 	}
 

@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	MasterKeySize     = 32 // 256 bits
+	MasterKeySize     = 32 
 	PBKDF2Iterations  = 100000
-	KeyEncryptionSize = 32 // 256 bits
+	KeyEncryptionSize = 32 
 )
 
 // GenerateMasterKey generates a new random master key
