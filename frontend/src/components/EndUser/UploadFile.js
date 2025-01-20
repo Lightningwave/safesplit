@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, X, Info, FolderIcon } from 'lucide-react';
+import { Upload, X, FolderIcon } from 'lucide-react';
 
 const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
-    const [shares, setShares] = useState(2);
-    const [threshold, setThreshold] = useState(2);
-    const [showTooltip, setShowTooltip] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
             setSelectedFile(null);
             setError('');
-            setShares(2);
-            setThreshold(2);
         }
     }, [isOpen]);
 
@@ -30,21 +25,6 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
             return;
         }
 
-        if (shares < threshold) {
-            setError('Number of shares must be greater than or equal to threshold');
-            return;
-        }
-
-        if (threshold < 2) {
-            setError('Threshold must be at least 2');
-            return;
-        }
-
-        if (shares > 10) {
-            setError('Number of shares cannot exceed 10');
-            return;
-        }
-
         setUploading(true);
         setError('');
 
@@ -57,8 +37,6 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
 
             const formData = new FormData();
             formData.append('file', selectedFile);
-            formData.append('shares', shares);
-            formData.append('threshold', threshold);
 
             // Add folder_id if we're in a folder
             if (currentFolder?.id) {
@@ -69,8 +47,6 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                 fileName: selectedFile.name,
                 fileSize: selectedFile.size,
                 fileType: selectedFile.type,
-                shares,
-                threshold,
                 folderId: currentFolder?.id || 'root'
             });
 
@@ -170,68 +146,6 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                                     : 'or drag and drop here'}
                             </p>
                         </label>
-                    </div>
-                </div>
-
-                <div className="mb-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                            <label htmlFor="shares" className="text-sm font-medium text-gray-700 mr-2">
-                                Number of Shares
-                            </label>
-                            <div className="relative">
-                                <Info 
-                                    size={16} 
-                                    className="text-gray-400 cursor-help"
-                                    onMouseEnter={() => setShowTooltip(true)}
-                                    onMouseLeave={() => setShowTooltip(false)}
-                                />
-                                {showTooltip && (
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 p-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap">
-                                        Total number of key shares to create
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <input
-                            type="number"
-                            id="shares"
-                            min="2"
-                            max="10"
-                            value={shares}
-                            onChange={(e) => setShares(parseInt(e.target.value))}
-                            className="w-20 px-2 py-1 border rounded-md"
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                            <label htmlFor="threshold" className="text-sm font-medium text-gray-700 mr-2">
-                                Threshold
-                            </label>
-                            <div className="relative">
-                                <Info 
-                                    size={16} 
-                                    className="text-gray-400 cursor-help"
-                                    onMouseEnter={() => setShowTooltip(true)}
-                                    onMouseLeave={() => setShowTooltip(false)}
-                                />
-                                {showTooltip && (
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 p-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap">
-                                        Minimum shares required to decrypt
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <input
-                            type="number"
-                            id="threshold"
-                            min="2"
-                            max={shares}
-                            value={threshold}
-                            onChange={(e) => setThreshold(parseInt(e.target.value))}
-                            className="w-20 px-2 py-1 border rounded-md"
-                        />
                     </div>
                 </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Share2, Copy, X } from 'lucide-react';
+import { Share2, Copy, X, Info } from 'lucide-react';
 
 const ShareFileAction = ({ file, user }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -10,13 +10,65 @@ const ShareFileAction = ({ file, user }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [copySuccess, setCopySuccess] = useState(false);
+    const [shares, setShares] = useState(2);                        // state for no. of shares
+    const [threshold, setThreshold] = useState(2);                  // state for threshold
+    const [emailInput, setEmailInput] = useState('');               // state for email input
+    const [emails, setEmails] = useState([]);                       // state for an array for email
+    const [showTooltip, setShowTooltip] = useState(false);          // state for tooltip visibility
+    const [shareGenerated, setShareGenerated] = useState(false);    // state for share link generation
 
     const isPremium = user?.role === 'premium_user';
+
+    const handleAddEmail = (e) => {
+        if (e.key === 'Enter' && e.target.value) {
+            const newEmail = e.target.value.trim();             // to remove whitespace
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;  // regex for email
+    
+            // to validate the email format
+            if (!emailPattern.test(newEmail)) {
+                setError(`Please enter a valid email address: ${newEmail}`);
+                return; // to exit if email is invalid
+            }
+    
+            // to check for duplicates
+            if (!emails.includes(newEmail)) {
+                setEmails([...emails, newEmail]);
+                setEmailInput('');    // to clear the input
+                setError('');           // to clear previous error
+            } else {
+                setError(`This email is already in the list: ${newEmail}`);
+            }
+        }
+    };
+
+    const handleDeleteEmail = (emailToDelete) => {
+        setEmails(emails.filter(email => email !== emailToDelete));
+    };
+
 
     const handleShare = async (e) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
+
+        // to validate no. of shares & threshold
+        if (shares < threshold) {
+            setError('Number of shares must be greater than or equal to threshold');
+            setIsLoading(false)
+            return;
+        }
+
+        if (threshold < 2) {
+            setError('Threshold must be at least 2');
+            setIsLoading(false)
+            return;
+        }
+
+        if (shares > 10) {
+            setError('Number of shares cannot exceed 10');
+            setIsLoading(false)
+            return;
+        }
 
         try {
             const token = localStorage.getItem('token');
@@ -28,6 +80,9 @@ const ShareFileAction = ({ file, user }) => {
             const shareData = {
                 file_id: file.id,
                 password: password,
+                shares: shares,         // to include no. of shares
+                threshold: threshold,   // to include threshold
+                email: emails,          // to include emails
                 ...(isPremium && {
                     expires_at: expiresAt || null,
                     max_downloads: maxDownloads ? parseInt(maxDownloads) : null
@@ -57,6 +112,9 @@ const ShareFileAction = ({ file, user }) => {
                 ? `http://localhost:3000/premium/share/`
                 : `http://localhost:3000/share/`;
             setShareLink(baseUrl + data.share_link);
+            setShareGenerated(true);        // to set true, after share successful
+            setEmailInput('');              // to clear the email input, after share successful
+            console.log(emails);            // to debug
         } catch (error) {
             setError(error.message);
         } finally {
@@ -81,8 +139,13 @@ const ShareFileAction = ({ file, user }) => {
         setPassword('');
         setExpiresAt('');
         setMaxDownloads('');
+        setShares(2);               // to reset no. of shares
+        setThreshold(2);            // to reset threshold
+        setEmailInput('');          // to reset email input
+        setEmails([]);              // to reset array of email
         setError('');
         setCopySuccess(false);
+        setShareGenerated(false);   // to reset share link generation state
     };
 
     return (
@@ -119,6 +182,121 @@ const ShareFileAction = ({ file, user }) => {
                             </div>
                         )}
 
+                        <div className="mb-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                {/* NO. OF SHARES INPUT SECTION */}
+                                <div className="flex items-center">
+                                    <label htmlFor="shares" className="text-sm font-medium text-gray-700 mr-2">
+                                        Number of Shares
+                                    </label>
+                                    <div className="relative">
+                                        <Info 
+                                            size={16} 
+                                            className="text-gray-400 cursor-help"
+                                            onMouseEnter={() => setShowTooltip('shares')}
+                                            onMouseLeave={() => setShowTooltip(false)}
+                                        />
+                                        {showTooltip === 'shares' && (
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 p-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap">
+                                                Total number of key shares to create
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <input
+                                    type="number"
+                                    id="shares"
+                                    min="2"
+                                    max="10"
+                                    value={shares}
+                                    onChange={(e) => setShares(parseInt(e.target.value))}
+                                    className={`w-20 px-2 py-1 border rounded-md ${shareGenerated ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : ''} ml-2`}
+                                    disabled={shareGenerated}   // to disable, if share link is generated
+                                />
+                            </div>
+                            
+                            {/* THRESHOLD INPUT SECTION */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <label htmlFor="threshold" className="text-sm font-medium text-gray-700 mr-2">
+                                        Threshold
+                                    </label>
+                                    <div className="relative">
+                                        <Info 
+                                            size={16} 
+                                            className="text-gray-400 cursor-help"
+                                            onMouseEnter={() => setShowTooltip('threshold')}
+                                            onMouseLeave={() => setShowTooltip(false)}
+                                        />
+                                        {showTooltip === 'threshold' && (
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 p-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap">
+                                                Minimum shares required to decrypt
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <input
+                                    type="number"
+                                    id="threshold"
+                                    min="2"
+                                    max={shares}
+                                    value={threshold}
+                                    onChange={(e) => setThreshold(parseInt(e.target.value))}
+                                    className={`w-20 px-2 py-1 border rounded-md ${shareGenerated ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : ''} ml-2`}
+                                    disabled={shareGenerated}   // to disable, if share link is generated
+                                />
+                            </div>
+                            
+                            {/* EMAIL INPUT SECTION */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <label htmlFor="email" className="text-sm font-medium text-gray-700 mr-2">
+                                        Email
+                                    </label>
+                                    <div className="relative">
+                                            <Info 
+                                                size={16} 
+                                                className="text-gray-400 cursor-help"
+                                                onMouseEnter={() => setShowTooltip('email')}
+                                                onMouseLeave={() => setShowTooltip(false)}
+                                            />
+                                            {showTooltip === 'email' && (
+                                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 p-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap">
+                                                    Emails to share with (comma-separated)
+                                                </div>
+                                            )}
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="email"
+                                    value={emailInput}
+                                    onChange={(e) => setEmailInput(e.target.value)}
+                                    onKeyDown={handleAddEmail}
+                                    className={`w-full px-2 py-1 border rounded-md ${shareGenerated ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : ''} ml-2`}
+                                    placeholder="Enter email(s) and press Enter"
+                                    disabled={shareGenerated}   // to disable, if share link is generated
+                                    />
+                            </div>
+
+                            {/* EMAIL TAGS */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {emails.map((email, index) => (
+                                    <div key={index} className="flex items-center bg-gray-200 rounded-md px-2 py-1">
+                                        <span>{email}</span>
+                                        <button
+                                            onClick={() => handleDeleteEmail(email)}
+                                            className={`ml-2 ${shareGenerated ? 'text-gray-500 cursor-not-allowed' : 'text-red-500 hover:text-red-700'}`}
+                                            disabled={shareGenerated}   // to disable, if share link is generated
+                                        >
+                                            X
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* SHARE LINK SECTION */}
                         {!shareLink ? (
                             <form onSubmit={handleShare} className="space-y-4">
                                 <div>
@@ -136,6 +314,7 @@ const ShareFileAction = ({ file, user }) => {
                                     />
                                 </div>
 
+                                {/* PREMIUM USER SECTION - additional features */}
                                 {isPremium && (
                                     <>
                                         <div>
