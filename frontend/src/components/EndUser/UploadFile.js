@@ -13,7 +13,7 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
         if (isOpen) {
             setSelectedFile(null);
             setError('');
-            setShares(2);
+            setShares(3);
             setThreshold(2);
         }
     }, [isOpen]);

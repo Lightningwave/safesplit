@@ -22,8 +22,8 @@ type KeyFragment struct {
 	ID               uint       `gorm:"primaryKey"`
 	FileID           uint       `gorm:"not null"`
 	FragmentIndex    int        `gorm:"not null"`
-	FragmentPath     string     `gorm:"not null"` // Path in node storage
-	NodeIndex        int        `gorm:"not null"` // Which node stores this fragment
+	FragmentPath     string     `gorm:"not null"`
+	NodeIndex        int        `gorm:"not null"`
 	EncryptionNonce  []byte     `gorm:"type:binary(16);not null"`
 	HolderType       HolderType `gorm:"type:enum('user','server');not null"`
 	MasterKeyVersion *int
@@ -48,9 +48,6 @@ func NewKeyFragmentModel(db *gorm.DB, storage *services.DistributedStorageServic
 	}
 }
 
-// -----------------------------------------------------
-// EXAMPLE FIX: Skip missing fragments in GetKeyFragments
-// -----------------------------------------------------
 func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]FragmentData, error) {
 	var fragments []KeyFragment
 
@@ -88,9 +85,6 @@ func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]FragmentData, error) 
 	)
 	return fragmentsWithData, nil
 }
-
-// Optional: If you want to skip missing fragments for user/server fragments,
-// apply the same pattern to GetFragmentsByType, GetUserFragmentsForFile, etc.
 
 func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []services.KeyShare, userID uint, serverKeyModel *ServerMasterKeyModel) error {
 	// Get server key for server fragments
@@ -205,7 +199,6 @@ func (m *KeyFragmentModel) GetFragmentsByType(fileID uint, holderType HolderType
 		return nil, fmt.Errorf("failed to retrieve fragments: %w", err)
 	}
 
-	// -- Same "skip missing" pattern if desired --
 	var fragmentsWithData []FragmentData
 	for _, fragment := range fragments {
 		data, err := m.storage.RetrieveFragment(fragment.NodeIndex, fragment.FragmentPath)
