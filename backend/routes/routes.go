@@ -26,6 +26,7 @@ type RouteHandlers struct {
 
 type EndUserHandlers struct {
 	UploadFileController    *EndUser.UploadFileController
+	MassUploadController    *EndUser.MassUploadFileController
 	ViewFilesController     *EndUser.ViewFilesController
 	DownloadFileController  *EndUser.DownloadFileController
 	DeleteFileController    *EndUser.DeleteFileController
@@ -99,6 +100,7 @@ func NewRouteHandlers(
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
+			MassUploadController: EndUser.NewMassUploadFileController(fileModel,userModel,activityLogModel,encryptionService,shamirService,keyFragmentModel,compressionService,folderModel,rsService,serverMasterKeyModel,),
 			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
 			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel,),
 			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
@@ -169,6 +171,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
 		files.GET("/:id/download", handlers.DownloadFileController.Download)
 		files.POST("/upload", handlers.UploadFileController.Upload)
+		files.POST("/mass-upload", handlers.MassUploadController.MassUpload)
 		files.GET("/encryption/options", handlers.UploadFileController.GetEncryptionOptions)
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)

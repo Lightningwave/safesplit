@@ -70,7 +70,6 @@ func main() {
 		serverMasterKeyModel,
 		encryptionService,
 		keyFragmentModel,
-		
 	)
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
