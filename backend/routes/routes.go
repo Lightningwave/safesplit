@@ -169,6 +169,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
 		files.GET("/:id/download", handlers.DownloadFileController.Download)
 		files.POST("/upload", handlers.UploadFileController.Upload)
+		files.GET("/encryption/options", handlers.UploadFileController.GetEncryptionOptions)
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
 		files.POST("/:id/share", handlers.ShareFileController.CreateShare)

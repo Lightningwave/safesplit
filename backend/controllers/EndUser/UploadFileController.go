@@ -94,6 +94,116 @@ func (c *UploadFileController) validateParameters(n, k, dataShards, parityShards
 	return nil
 }
 
+// Add new method for encryption options
+func (c *UploadFileController) GetAvailableEncryptionTypes(user *models.User) []gin.H {
+	// Standard encryption is available to all users
+	available := []gin.H{
+		{
+			"type":        services.StandardEncryption,
+			"name":        "Standard (AES-256-GCM)",
+			"description": "Standard encryption using AES-256 in GCM mode",
+		},
+	}
+
+	// Additional options for premium users
+	if user.IsPremiumUser() {
+		available = append(available,
+			gin.H{
+				"type":        services.ChaCha20,
+				"name":        "ChaCha20-Poly1305",
+				"description": "High-performance encryption, ideal for mobile devices",
+			},
+			gin.H{
+				"type":        services.Twofish,
+				"name":        "Twofish-256",
+				"description": "Alternative to AES, different security properties",
+			},
+		)
+	}
+
+	return available
+}
+func (c *UploadFileController) handleFolderAssignment(ctx *gin.Context, currentUser *models.User) *uint {
+	if folderIDStr := ctx.PostForm("folder_id"); folderIDStr != "" {
+		id, err := strconv.ParseUint(folderIDStr, 10, 32)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Invalid folder ID format"})
+			return nil
+		}
+		parsedID := uint(id)
+		return &parsedID
+	}
+
+	folders, err := c.folderModel.GetUserFolders(currentUser.ID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to check folders"})
+		return nil
+	}
+
+	var myFilesID *uint
+	for _, folder := range folders {
+		if folder.Name == "My Files" {
+			myFilesID = &folder.ID
+			break
+		}
+	}
+
+	if myFilesID == nil {
+		defaultFolder := &models.Folder{
+			UserID: currentUser.ID,
+			Name:   "My Files",
+		}
+		if err := c.folderModel.CreateFolder(defaultFolder); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to create default folder"})
+			return nil
+		}
+		myFilesID = &defaultFolder.ID
+	}
+
+	return myFilesID
+}
+
+// Add encryption options endpoint
+func (c *UploadFileController) GetEncryptionOptions(ctx *gin.Context) {
+	user, exists := ctx.Get("user")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "error": "Unauthorized access"})
+		return
+	}
+
+	currentUser, ok := user.(*models.User)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Invalid user data"})
+		return
+	}
+
+	options := c.GetAvailableEncryptionTypes(currentUser)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"available_encryption": options,
+			"is_premium":           currentUser.IsPremiumUser(),
+			"default":              services.StandardEncryption,
+		},
+	})
+}
+
+// Add encryption validation
+func (c *UploadFileController) validateEncryptionType(encType services.EncryptionType, user *models.User) error {
+	switch encType {
+	case services.StandardEncryption:
+		return nil
+	case services.ChaCha20, services.Twofish:
+		if !user.IsPremiumUser() {
+			return fmt.Errorf("%s encryption requires a premium account", encType)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", encType)
+	}
+}
+
 type processedFile struct {
 	compressed []byte
 	encrypted  []byte
@@ -117,6 +227,17 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 	currentUser, ok := user.(*models.User)
 	if !ok {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Invalid user data"})
+		return
+	}
+
+	// Get and validate encryption type
+	encryptionType := services.EncryptionType(ctx.DefaultPostForm("encryption_type", string(services.StandardEncryption)))
+	if err := c.validateEncryptionType(encryptionType, currentUser); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status":            "error",
+			"error":             err.Error(),
+			"available_options": c.GetAvailableEncryptionTypes(currentUser),
+		})
 		return
 	}
 
@@ -164,8 +285,8 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		return
 	}
 
-	// Process file upload
-	processedFile, err := c.processFileUpload(fileHeader, nShares, threshold, dataShards, parityShards)
+	// Process file upload with encryption type
+	processedFile, err := c.processFileUpload(fileHeader, nShares, threshold, dataShards, parityShards, encryptionType)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": err.Error()})
 		return
@@ -189,25 +310,27 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 
 	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
 	fileRecord := &models.File{
-		UserID:           currentUser.ID,
-		FolderID:         folderID,
-		Name:             encryptedFileName,
-		OriginalName:     fileHeader.Filename,
-		Size:             fileHeader.Size,
-		CompressedSize:   int64(len(processedFile.compressed)),
-		MimeType:         fileHeader.Header.Get("Content-Type"),
-		EncryptionIV:     processedFile.iv,
-		EncryptionSalt:   processedFile.salt,
-		FileHash:         processedFile.fileHash,
-		ShareCount:       uint(nShares),
-		Threshold:        uint(threshold),
-		DataShardCount:   uint(dataShards),
-		ParityShardCount: uint(parityShards),
-		IsCompressed:     true,
-		IsSharded:        true,
-		CompressionRatio: processedFile.ratio,
-		ServerKeyID:      serverKey.KeyID, // Add this
-		MasterKeyVersion: 1,               // Add this
+		UserID:            currentUser.ID,
+		FolderID:          folderID,
+		Name:              encryptedFileName,
+		OriginalName:      fileHeader.Filename,
+		Size:              fileHeader.Size,
+		CompressedSize:    int64(len(processedFile.compressed)),
+		MimeType:          fileHeader.Header.Get("Content-Type"),
+		EncryptionIV:      processedFile.iv,
+		EncryptionSalt:    processedFile.salt,
+		EncryptionType:    encryptionType,
+		EncryptionVersion: 1,
+		FileHash:          processedFile.fileHash,
+		ShareCount:        uint(nShares),
+		Threshold:         uint(threshold),
+		DataShardCount:    uint(dataShards),
+		ParityShardCount:  uint(parityShards),
+		IsCompressed:      true,
+		IsSharded:         true,
+		CompressionRatio:  processedFile.ratio,
+		ServerKeyID:       serverKey.KeyID,
+		MasterKeyVersion:  1,
 	}
 
 	// Create file with shards
@@ -216,7 +339,7 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		processedFile.shares,
 		processedFile.shards,
 		c.keyFragmentModel,
-		c.serverKeyModel, // Add this line
+		c.serverKeyModel,
 	); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
@@ -225,15 +348,20 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 		return
 	}
 
-	// Log activity
+	// Log activity with encryption type
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       currentUser.ID,
-		ActivityType: "upload",
+		ActivityType: "upload", // Must match ENUM value in DB
 		FileID:       &fileRecord.ID,
 		IPAddress:    ctx.ClientIP(),
-		Status:       "success",
-		Details: fmt.Sprintf("File uploaded with %d data shards, %d parity shards, compressed to %.2f%%",
-			dataShards, parityShards, processedFile.ratio*100),
+		Status:       "success", // Must match ENUM value in DB
+		Details: fmt.Sprintf(
+			"File uploaded with %s encryption, %d shares, %d threshold, %.2f%% compression",
+			encryptionType,
+			nShares,
+			threshold,
+			processedFile.ratio*100,
+		),
 	}); err != nil {
 		log.Printf("Failed to log activity: %v", err)
 	}
@@ -253,6 +381,10 @@ func (c *UploadFileController) Upload(ctx *gin.Context) {
 				"compressedSize":   fileRecord.CompressedSize,
 				"compressionRatio": fmt.Sprintf("%.2f%%", processedFile.ratio*100),
 			},
+			"encryptionInfo": gin.H{
+				"type":    encryptionType,
+				"version": 1,
+			},
 			"folder_id": folderID,
 		},
 	})
@@ -262,8 +394,9 @@ func (c *UploadFileController) processFileUpload(
 	fileHeader *multipart.FileHeader,
 	n, k int,
 	dataShards, parityShards int,
+	encType services.EncryptionType,
 ) (*processedFile, error) {
-	log.Printf("Starting file processing - Size: %d bytes", fileHeader.Size)
+	log.Printf("Starting file processing - Size: %d bytes, Encryption: %s", fileHeader.Size, encType)
 
 	src, err := fileHeader.Open()
 	if err != nil {
@@ -297,21 +430,22 @@ func (c *UploadFileController) processFileUpload(
 	}
 
 	// Generate a temporary file ID for encryption
-	// This will be replaced with the actual file ID after database insertion
 	tempFileID := uint(time.Now().UnixNano())
 
-	// Encrypt the compressed content
-	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFile(
+	// Use EncryptFileWithType for encryption
+	encrypted, iv, salt, shares, err := c.encryptionService.EncryptFileWithType(
 		compressed,
 		n,
 		k,
 		tempFileID,
 		serverKey.KeyID,
+		encType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
-	log.Printf("Encrypted data - Size: %d bytes, Raw shares: %d", len(encrypted), len(shares))
+	log.Printf("Encrypted data - Size: %d bytes, Raw shares: %d, Algorithm: %s",
+		len(encrypted), len(shares), encType)
 
 	// Log the shares received from encryption service
 	for i, share := range shares {
@@ -336,45 +470,4 @@ func (c *UploadFileController) processFileUpload(
 		fileHash:   fileHash,
 		ratio:      ratio,
 	}, nil
-}
-
-// Helper method to handle folder assignment
-func (c *UploadFileController) handleFolderAssignment(ctx *gin.Context, currentUser *models.User) *uint {
-	if folderIDStr := ctx.PostForm("folder_id"); folderIDStr != "" {
-		id, err := strconv.ParseUint(folderIDStr, 10, 32)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Invalid folder ID format"})
-			return nil
-		}
-		parsedID := uint(id)
-		return &parsedID
-	}
-
-	folders, err := c.folderModel.GetUserFolders(currentUser.ID)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to check folders"})
-		return nil
-	}
-
-	var myFilesID *uint
-	for _, folder := range folders {
-		if folder.Name == "My Files" {
-			myFilesID = &folder.ID
-			break
-		}
-	}
-
-	if myFilesID == nil {
-		defaultFolder := &models.Folder{
-			UserID: currentUser.ID,
-			Name:   "My Files",
-		}
-		if err := c.folderModel.CreateFolder(defaultFolder); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Failed to create default folder"})
-			return nil
-		}
-		myFilesID = &defaultFolder.ID
-	}
-
-	return myFilesID
 }

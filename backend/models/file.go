@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -10,48 +11,77 @@ import (
 	"gorm.io/gorm"
 )
 
+type EncryptionType string
+
+const (
+	StandardEncryption EncryptionType = "standard" // AES-256-GCM
+	ChaCha20           EncryptionType = "chacha20" // ChaCha20-Poly1305
+	Twofish            EncryptionType = "twofish"  // Twofish
+)
+
 type File struct {
-	ID               uint       `json:"id" gorm:"primaryKey"`
-	UserID           uint       `json:"user_id"`
-	FolderID         *uint      `json:"folder_id,omitempty"`
-	Name             string     `json:"name"`
-	OriginalName     string     `json:"original_name"`
-	FilePath         string     `json:"file_path"`
-	Size             int64      `json:"size" gorm:"not null"`
-	CompressedSize   int64      `json:"compressed_size"`
-	IsCompressed     bool       `json:"is_compressed" gorm:"default:false"`
-	CompressionRatio float64    `json:"compression_ratio"`
-	MimeType         string     `json:"mime_type"`
-	IsArchived       bool       `json:"is_archived" gorm:"default:false"`
-	IsDeleted        bool       `json:"is_deleted" gorm:"default:false"`
-	DeletedAt        *time.Time `json:"deleted_at"`
-	EncryptionIV     []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
-	EncryptionSalt   []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
-	ServerKeyID      string     `json:"server_key_id" gorm:"type:varchar(64)"` 
-    MasterKeyVersion int        `json:"master_key_version" gorm:"not null;default:1"`
-	FileHash         string     `json:"file_hash"`
-	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
-	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
-	DataShardCount   uint       `json:"data_shard_count" gorm:"not null;default:4"`
-	ParityShardCount uint       `json:"parity_shard_count" gorm:"not null;default:2"`
-	IsSharded        bool       `json:"is_sharded" gorm:"default:false"`
-	IsShared         bool       `json:"is_shared" gorm:"default:false"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                uint                    `json:"id" gorm:"primaryKey"`
+	UserID            uint                    `json:"user_id"`
+	FolderID          *uint                   `json:"folder_id,omitempty"`
+	Name              string                  `json:"name"`
+	OriginalName      string                  `json:"original_name"`
+	FilePath          string                  `json:"file_path"`
+	Size              int64                   `json:"size" gorm:"not null"`
+	CompressedSize    int64                   `json:"compressed_size"`
+	IsCompressed      bool                    `json:"is_compressed" gorm:"default:false"`
+	CompressionRatio  float64                 `json:"compression_ratio"`
+	MimeType          string                  `json:"mime_type"`
+	IsArchived        bool                    `json:"is_archived" gorm:"default:false"`
+	IsDeleted         bool                    `json:"is_deleted" gorm:"default:false"`
+	DeletedAt         *time.Time              `json:"deleted_at"`
+	EncryptionIV      []byte                  `json:"encryption_iv" gorm:"type:varbinary(24);null"`
+	EncryptionSalt    []byte                  `json:"encryption_salt" gorm:"type:binary(32);null"`
+	EncryptionType    services.EncryptionType `json:"encryption_type" gorm:"type:varchar(20);default:'standard'"`
+	EncryptionVersion int                     `json:"encryption_version" gorm:"default:1"`
+	ServerKeyID       string                  `json:"server_key_id" gorm:"type:varchar(64)"`
+	MasterKeyVersion  int                     `json:"master_key_version" gorm:"not null;default:1"`
+	FileHash          string                  `json:"file_hash"`
+	ShareCount        uint                    `json:"share_count" gorm:"not null;default:2"`
+	Threshold         uint                    `json:"threshold" gorm:"not null;default:2"`
+	DataShardCount    uint                    `json:"data_shard_count" gorm:"not null;default:4"`
+	ParityShardCount  uint                    `json:"parity_shard_count" gorm:"not null;default:2"`
+	IsSharded         bool                    `json:"is_sharded" gorm:"default:false"`
+	IsShared          bool                    `json:"is_shared" gorm:"default:false"`
+	CreatedAt         time.Time               `json:"created_at"`
+	UpdatedAt         time.Time               `json:"updated_at"`
 }
-
 type FileModel struct {
-    db             *gorm.DB
-    rsService      *services.ReedSolomonService
-    serverKeyModel *ServerMasterKeyModel
+	db                *gorm.DB
+	rsService         *services.ReedSolomonService
+	serverKeyModel    *ServerMasterKeyModel
+	encryptionService *services.EncryptionService
+	keyFragmentModel  *KeyFragmentModel
 }
 
-func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService, serverKeyModel *ServerMasterKeyModel) *FileModel {
-    return &FileModel{
-        db:             db,
-        rsService:      rsService,
-        serverKeyModel: serverKeyModel,
-    }
+func NewFileModel(
+	db *gorm.DB,
+	rsService *services.ReedSolomonService,
+	serverKeyModel *ServerMasterKeyModel,
+	encryptionService *services.EncryptionService,
+	keyFragmentModel *KeyFragmentModel,
+) *FileModel {
+	return &FileModel{
+		db:                db,
+		rsService:         rsService,
+		serverKeyModel:    serverKeyModel,
+		encryptionService: encryptionService,
+		keyFragmentModel:  keyFragmentModel,
+	}
+}
+
+// validation method for encryption type
+func (f *File) ValidateEncryption() error {
+	switch f.EncryptionType {
+	case services.StandardEncryption, services.ChaCha20, services.Twofish:
+		return nil
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", f.EncryptionType)
+	}
 }
 
 // File CRUD operations
@@ -62,6 +92,16 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 
 	if file.Name == "" {
 		return fmt.Errorf("file name is required")
+	}
+
+	// Add encryption validation
+	if err := file.ValidateEncryption(); err != nil {
+		return err
+	}
+
+	// Add IV size validation
+	if err := file.ValidateIVSize(); err != nil {
+		return err
 	}
 
 	result := tx.Create(file)
@@ -75,98 +115,167 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 }
 
 func (m *FileModel) CreateFileWithShards(
-    file *File, 
-    shares []services.KeyShare, 
-    shards [][]byte, 
-    keyFragmentModel *KeyFragmentModel,
-    serverKeyModel *ServerMasterKeyModel,
+	file *File,
+	shares []services.KeyShare,
+	shards [][]byte,
+	keyFragmentModel *KeyFragmentModel,
+	serverKeyModel *ServerMasterKeyModel,
 ) error {
-    tx := m.db.Begin()
-    defer func() {
-        if r := recover(); r != nil {
-            tx.Rollback()
-        }
-    }()
+	tx := m.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
-    // Verify folder if provided
-    if file.FolderID != nil {
-        var folder Folder
-        if err := tx.Where("id = ? AND user_id = ? AND is_archived = ?",
-            file.FolderID, file.UserID, false).First(&folder).Error; err != nil {
-            tx.Rollback()
-            return fmt.Errorf("invalid folder: %w", err)
-        }
-    }
+	// Create file record
+	if err := m.CreateFile(tx, file); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create file record: %w", err)
+	}
 
-    // Create file record
-    if err := m.CreateFile(tx, file); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("failed to create file record: %w", err)
-    }
+	// Store the Reed-Solomon shards
+	if err := m.rsService.StoreShards(file.ID, &services.FileShards{
+		Shards: shards,
+	}); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to store shards: %w", err)
+	}
 
-    // Store the Reed-Solomon shards
-    if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("failed to store shards: %w", err)
-    }
+	// Save key fragments
+	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
+		m.rsService.DeleteShards(file.ID)
+		tx.Rollback()
+		return fmt.Errorf("failed to save key fragments: %w", err)
+	}
 
-    // Save key fragments - passing userID and serverKeyModel
-    if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
-        // Clean up stored shards on failure
-        m.rsService.DeleteShards(file.ID)
-        tx.Rollback()
-        return fmt.Errorf("failed to save key fragments: %w", err)
-    }
+	// Update user storage
+	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+		m.rsService.DeleteShards(file.ID)
+		tx.Rollback()
+		return fmt.Errorf("failed to update storage usage: %w", err)
+	}
 
-    // Update user storage
-    if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
-        // Clean up stored shards on failure
-        m.rsService.DeleteShards(file.ID)
-        tx.Rollback()
-        return fmt.Errorf("failed to update storage usage: %w", err)
-    }
+	// Log activity with correct activity type
+	type ActivityLog struct {
+		UserID       uint
+		ActivityType string
+		FileID       *uint
+		Status       string
+		Details      string
+	}
 
-    if err := tx.Commit().Error; err != nil {
-        // Clean up stored shards on failure
-        m.rsService.DeleteShards(file.ID)
-        return fmt.Errorf("failed to commit transaction: %w", err)
-    }
+	activity := &ActivityLog{
+		UserID:       file.UserID,
+		ActivityType: "upload", // Changed from 'create' to 'upload'
+		FileID:       &file.ID,
+		Status:       "success",
+		Details: fmt.Sprintf("File uploaded with %s encryption, %d shards",
+			file.EncryptionType, len(shards)),
+	}
 
-    return nil
+	if err := tx.Create(activity).Error; err != nil {
+		m.rsService.DeleteShards(file.ID)
+		tx.Rollback()
+		return fmt.Errorf("failed to log activity: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		m.rsService.DeleteShards(file.ID)
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 // ReadFileShards retrieves and reconstructs the file content from shards
 func (m *FileModel) ReadFileShards(file *File) ([]byte, error) {
-    // Get server master key for decryption
-    masterKey, err := m.serverKeyModel.GetServerKey(file.ServerKeyID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get server key: %w", err)
-    }
+	log.Printf("Reading file shards - ID: %d, Encryption: %s", file.ID, file.EncryptionType)
 
-    // Retrieve all available shards
-    fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
-    if err != nil {
-        return nil, fmt.Errorf("failed to retrieve shards: %w", err)
-    }
+	// Get key fragments for decryption
+	fragmentsWithData, err := m.keyFragmentModel.GetKeyFragments(file.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key fragments: %w", err)
+	}
 
-    // Validate we have enough shards for reconstruction
-    if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
-        return nil, fmt.Errorf("insufficient shards available for reconstruction")
-    }
+	// Convert FragmentData to KeyShare
+	keyShares := make([]services.KeyShare, len(fragmentsWithData))
+	for i, fragment := range fragmentsWithData {
+		keyShares[i] = services.KeyShare{
+			Index:      fragment.FragmentIndex,
+			Value:      hex.EncodeToString(fragment.Data),
+			HolderType: string(fragment.HolderType),
+			NodeIndex:  fragment.NodeIndex,
+		}
+	}
 
-    // Reconstruct the original data
-    reconstructed, err := m.rsService.ReconstructFile(fileShards.Shards, int(file.DataShardCount), int(file.ParityShardCount))
-    if err != nil {
-        return nil, fmt.Errorf("failed to reconstruct file: %w", err)
-    }
+	// Retrieve all available shards
+	fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve shards: %w", err)
+	}
 
-    // Decrypt the reconstructed data with the server master key
-    decrypted, err := services.DecryptMasterKey(reconstructed, masterKey, file.EncryptionIV)
-    if err != nil {
-        return nil, fmt.Errorf("failed to decrypt reconstructed data: %w", err)
-    }
+	// Validate we have enough shards for reconstruction
+	if !m.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
+		return nil, fmt.Errorf("insufficient shards available for reconstruction")
+	}
 
-    return decrypted, nil
+	// Reconstruct the original data
+	reconstructed, err := m.rsService.ReconstructFile(fileShards.Shards, int(file.DataShardCount), int(file.ParityShardCount))
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconstruct file: %w", err)
+	}
+
+	log.Printf("File reconstructed - Size: %d bytes", len(reconstructed))
+
+	// Use the unified DecryptFileWithType method
+	decrypted, err := m.encryptionService.DecryptFileWithType(
+		reconstructed,
+		file.EncryptionIV,
+		keyShares,
+		int(file.Threshold),
+		file.EncryptionSalt,
+		file.EncryptionType,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt file: %w", err)
+	}
+
+	log.Printf("File decrypted successfully - Final size: %d bytes", len(decrypted))
+	return decrypted, nil
+}
+func (m *FileModel) GetFileEncryptionInfo(fileID uint) (*struct {
+	Type      services.EncryptionType `json:"type"`
+	Version   int                     `json:"version"`
+	Algorithm string                  `json:"algorithm"`
+}, error) {
+	var file File
+	err := m.db.Select("encryption_type, encryption_version").
+		Where("id = ?", fileID).
+		First(&file).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get encryption info: %w", err)
+	}
+
+	var algorithm string
+	switch file.EncryptionType {
+	case services.StandardEncryption:
+		algorithm = "AES-256-GCM"
+	case services.ChaCha20:
+		algorithm = "ChaCha20-Poly1305"
+	case services.Twofish:
+		algorithm = "Twofish-256"
+	}
+
+	return &struct {
+		Type      services.EncryptionType `json:"type"`
+		Version   int                     `json:"version"`
+		Algorithm string                  `json:"algorithm"`
+	}{
+		Type:      file.EncryptionType,
+		Version:   file.EncryptionVersion,
+		Algorithm: algorithm,
+	}, nil
 }
 
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
@@ -592,4 +701,23 @@ func (m *FileModel) GetUserFileCount(userID uint) (int64, error) {
 		return 0, fmt.Errorf("failed to count files: %w", err)
 	}
 	return count, nil
+}
+func (f *File) ValidateIVSize() error {
+	var expectedSize int
+	switch f.EncryptionType {
+	case services.ChaCha20:
+		expectedSize = 24 // XChaCha20-Poly1305
+	case services.Twofish:
+		expectedSize = 12 // Twofish-GCM
+	case services.StandardEncryption:
+		expectedSize = 16 // AES-GCM
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", f.EncryptionType)
+	}
+
+	if len(f.EncryptionIV) != expectedSize {
+		return fmt.Errorf("invalid IV length for %s encryption: got %d, expected %d",
+			f.EncryptionType, len(f.EncryptionIV), expectedSize)
+	}
+	return nil
 }

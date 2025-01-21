@@ -121,10 +121,12 @@ CREATE TABLE files (
     is_deleted BOOLEAN DEFAULT FALSE,             -- Soft delete flag
     is_shared BOOLEAN DEFAULT FALSE,              -- Whether file is shared
     deleted_at TIMESTAMP NULL,                    -- Soft delete timestamp
-    encryption_iv BINARY(16),                     -- AES initialization vector
+    encryption_iv VARBINARY(24),                  -- Initialization vector
     encryption_salt BINARY(32),                   -- Salt for key derivation
+    encryption_type VARCHAR(20) DEFAULT 'standard',-- Type of encryption used
+    encryption_version INT DEFAULT 1,             -- Version of encryption
     master_key_version INT NOT NULL DEFAULT 1,    -- Version of master key used
-    server_key_id VARCHAR(64) NULL,              -- ID of server key used
+    server_key_id VARCHAR(64) NULL,               -- ID of server key used
     share_count INTEGER NOT NULL DEFAULT 2,       -- Shamir's scheme shares
     threshold INTEGER NOT NULL DEFAULT 2,         -- Shamir's scheme threshold
     file_hash VARCHAR(64) NOT NULL,               -- Integrity verification

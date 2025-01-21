@@ -20,7 +20,7 @@ type DownloadFileController struct {
 	activityLogModel   *models.ActivityLogModel
 	compressionService *services.CompressionService
 	rsService          *services.ReedSolomonService
-	serverKeyModel     *models.ServerMasterKeyModel // Added
+	serverKeyModel     *models.ServerMasterKeyModel
 }
 
 func NewDownloadFileController(
@@ -30,7 +30,7 @@ func NewDownloadFileController(
 	activityLogModel *models.ActivityLogModel,
 	compressionService *services.CompressionService,
 	rsService *services.ReedSolomonService,
-	serverKeyModel *models.ServerMasterKeyModel, // Added
+	serverKeyModel *models.ServerMasterKeyModel, 
 ) *DownloadFileController {
 	return &DownloadFileController{
 		fileModel:          fileModel,
@@ -39,7 +39,7 @@ func NewDownloadFileController(
 		activityLogModel:   activityLogModel,
 		compressionService: compressionService,
 		rsService:          rsService,
-		serverKeyModel:     serverKeyModel, // Added
+		serverKeyModel:     serverKeyModel, 
 	}
 }
 
@@ -161,8 +161,21 @@ func (c *DownloadFileController) getAndValidateFile(ctx *gin.Context, userID, fi
 }
 
 func (c *DownloadFileController) validateFileMetadata(file *models.File) error {
-	if len(file.EncryptionIV) != 16 {
-		return fmt.Errorf("invalid IV length: got %d, expected 16", len(file.EncryptionIV))
+	var expectedIVSize int
+	switch file.EncryptionType {
+	case services.ChaCha20:
+		expectedIVSize = 24 // XChaCha20-Poly1305
+	case services.Twofish:
+		expectedIVSize = 12 // GCM requires 12-byte nonce for Twofish
+	case services.StandardEncryption:
+		expectedIVSize = 16 // AES-GCM
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", file.EncryptionType)
+	}
+
+	if len(file.EncryptionIV) != expectedIVSize {
+		return fmt.Errorf("invalid IV length for %s encryption: got %d, expected %d",
+			file.EncryptionType, len(file.EncryptionIV), expectedIVSize)
 	}
 
 	if len(file.EncryptionSalt) != 32 {
@@ -187,7 +200,6 @@ func (c *DownloadFileController) validateFileMetadata(file *models.File) error {
 	return nil
 }
 
-// In getKeyShares method:
 func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.File) ([]services.KeyShare, error) {
 	log.Printf("Retrieving key fragments for file %d - Threshold: %d, Expected shares: %d",
 		file.ID, file.Threshold, file.ShareCount)
@@ -360,7 +372,7 @@ func (c *DownloadFileController) getShardedData(ctx *gin.Context, file *models.F
 }
 
 func (c *DownloadFileController) decryptData(ctx *gin.Context, file *models.File, data []byte, shares []services.KeyShare) ([]byte, error) {
-	log.Printf("Starting decryption for file ID: %d", file.ID)
+	log.Printf("Starting decryption for file ID: %d with encryption type: %s", file.ID, file.EncryptionType)
 	log.Printf("Data size: %d bytes", len(data))
 	log.Printf("IV length: %d bytes", len(file.EncryptionIV))
 	log.Printf("Salt length: %d bytes", len(file.EncryptionSalt))
@@ -369,7 +381,15 @@ func (c *DownloadFileController) decryptData(ctx *gin.Context, file *models.File
 		log.Printf("Share %d - Index: %d, Value length: %d", i, share.Index, len(share.Value))
 	}
 
-	decrypted, err := c.encryptionService.DecryptFile(data, file.EncryptionIV, shares, int(file.Threshold), file.EncryptionSalt)
+	// Use the appropriate decryption method based on encryption type
+	decrypted, err := c.encryptionService.DecryptFileWithType(
+		data,
+		file.EncryptionIV,
+		shares,
+		int(file.Threshold),
+		file.EncryptionSalt,
+		file.EncryptionType,
+	)
 	if err != nil {
 		log.Printf("Decryption failed: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{

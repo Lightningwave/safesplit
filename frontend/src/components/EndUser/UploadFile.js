@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, X, Info, FolderIcon } from 'lucide-react';
+import { Upload, X, Info, FolderIcon, Lock } from 'lucide-react';
 
 const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
-    const [shares, setShares] = useState(2);
+    const [shares, setShares] = useState(3);
     const [threshold, setThreshold] = useState(2);
     const [showTooltip, setShowTooltip] = useState(false);
+    const [encryptionTypes, setEncryptionTypes] = useState([]);
+    const [selectedEncryption, setSelectedEncryption] = useState('standard');
+    const [isPremium, setIsPremium] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -15,8 +18,31 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
             setError('');
             setShares(3);
             setThreshold(2);
+            fetchEncryptionOptions();
         }
     }, [isOpen]);
+
+    const fetchEncryptionOptions = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://localhost:8080/api/files/encryption/options', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                credentials: 'include',
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch encryption options');
+
+            const data = await response.json();
+            setEncryptionTypes(data.data.available_encryption);
+            setIsPremium(data.data.is_premium);
+            setSelectedEncryption(data.data.default);
+        } catch (err) {
+            console.error('Failed to fetch encryption options:', err);
+            setError('Failed to load encryption options');
+        }
+    };
 
     const handleFileSelect = (event) => {
         const file = event.target.files[0];
@@ -59,8 +85,8 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
             formData.append('file', selectedFile);
             formData.append('shares', shares);
             formData.append('threshold', threshold);
+            formData.append('encryption_type', selectedEncryption);
 
-            // Add folder_id if we're in a folder
             if (currentFolder?.id) {
                 formData.append('folder_id', currentFolder.id);
             }
@@ -71,6 +97,7 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                 fileType: selectedFile.type,
                 shares,
                 threshold,
+                encryptionType: selectedEncryption,
                 folderId: currentFolder?.id || 'root'
             });
 
@@ -171,6 +198,38 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                             </p>
                         </label>
                     </div>
+                </div>
+
+                {/* Encryption Options */}
+                <div className="mb-6">
+                    <div className="flex items-center mb-2">
+                        <Lock size={16} className="mr-2 text-gray-600" />
+                        <label className="text-sm font-medium text-gray-700">
+                            Encryption Method
+                        </label>
+                    </div>
+                    <select
+                        value={selectedEncryption}
+                        onChange={(e) => setSelectedEncryption(e.target.value)}
+                        className="w-full p-2 border rounded-md bg-white"
+                    >
+                        {encryptionTypes.map((type) => (
+                            <option 
+                                key={type.type} 
+                                value={type.type}
+                                disabled={!isPremium && type.type !== 'standard'}
+                            >
+                                {type.name} {!isPremium && type.type !== 'standard' && '(Premium)'}
+                            </option>
+                        ))}
+                    </select>
+                    {encryptionTypes.map((type) => 
+                        type.type === selectedEncryption && (
+                            <p key={type.type} className="mt-1 text-sm text-gray-500">
+                                {type.description}
+                            </p>
+                        )
+                    )}
                 </div>
 
                 <div className="mb-6 space-y-4">

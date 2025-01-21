@@ -64,8 +64,14 @@ func main() {
 	}
 
 	// Initialize file model with server master key model
-	fileModel := models.NewFileModel(db, rsService, serverMasterKeyModel)
-
+	fileModel := models.NewFileModel(
+		db,
+		rsService,
+		serverMasterKeyModel,
+		encryptionService,
+		keyFragmentModel,
+		
+	)
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
 		db,
