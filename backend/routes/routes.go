@@ -29,6 +29,7 @@ type EndUserHandlers struct {
 	MassUploadController    *EndUser.MassUploadFileController
 	ViewFilesController     *EndUser.ViewFilesController
 	DownloadFileController  *EndUser.DownloadFileController
+	MassDownloadController  *EndUser.MassDownloadFileController
 	DeleteFileController    *EndUser.DeleteFileController
 	ArchiveFileController   *EndUser.ArchiveFileController
 	ShareFileController     *EndUser.ShareFileController
@@ -100,9 +101,10 @@ func NewRouteHandlers(
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
-			MassUploadController: EndUser.NewMassUploadFileController(fileModel,userModel,activityLogModel,encryptionService,shamirService,keyFragmentModel,compressionService,folderModel,rsService,serverMasterKeyModel,),
+			MassUploadController:    EndUser.NewMassUploadFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
 			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
-			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel,),
+			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
+			MassDownloadController:  EndUser.NewMassDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
 			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
 			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
 			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
@@ -170,6 +172,8 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	{
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
 		files.GET("/:id/download", handlers.DownloadFileController.Download)
+		files.POST("/mass-download", handlers.MassDownloadController.MassDownload)
+		files.GET("/mass-download/:id", handlers.MassDownloadController.GetFile)
 		files.POST("/upload", handlers.UploadFileController.Upload)
 		files.POST("/mass-upload", handlers.MassUploadController.MassUpload)
 		files.GET("/encryption/options", handlers.UploadFileController.GetEncryptionOptions)
