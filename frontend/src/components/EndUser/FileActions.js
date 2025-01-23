@@ -40,8 +40,16 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                     />
                     <ShareFileAction file={file} user={user} />
-                    <ArchiveFileAction file={file} />
-                    <DeleteFileAction file={file} onDelete={onRefresh} />
+                    <ArchiveFileAction 
+                        file={file} 
+                        selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
+                        onRefresh={onRefresh}
+                    />
+                    <DeleteFileAction 
+                        file={file} 
+                        selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
+                        onRefresh={onRefresh} 
+                    />
                 </div>
             )}
         </div>

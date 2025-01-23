@@ -31,7 +31,9 @@ type EndUserHandlers struct {
 	DownloadFileController  *EndUser.DownloadFileController
 	MassDownloadController  *EndUser.MassDownloadFileController
 	DeleteFileController    *EndUser.DeleteFileController
+	MassDeleteFileController *EndUser.MassDeleteFileController
 	ArchiveFileController   *EndUser.ArchiveFileController
+	MassArchiveController    *EndUser.MassArchiveFileController
 	ShareFileController     *EndUser.ShareFileController
 	CreateFolderController  *EndUser.CreateFolderController
 	ViewFolderController    *EndUser.ViewFolderController
@@ -106,7 +108,9 @@ func NewRouteHandlers(
 			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
 			MassDownloadController:  EndUser.NewMassDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
 			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
+			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
 			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
+			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
 			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
 			CreateFolderController:  EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
@@ -178,7 +182,9 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.POST("/mass-upload", handlers.MassUploadController.MassUpload)
 		files.GET("/encryption/options", handlers.UploadFileController.GetEncryptionOptions)
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
+		files.POST("/mass-delete", handlers.MassDeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
+		files.POST("/mass-archive", handlers.MassArchiveController.Archive)
 		files.POST("/:id/share", handlers.ShareFileController.CreateShare)
 		files.GET("/share/:shareLink", handlers.ShareFileController.AccessShare)
 	}

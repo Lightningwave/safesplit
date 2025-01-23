@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"safesplit/services"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -121,71 +122,81 @@ func (m *FileModel) CreateFileWithShards(
 	keyFragmentModel *KeyFragmentModel,
 	serverKeyModel *ServerMasterKeyModel,
 ) error {
-	tx := m.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	return withTransactionRetry(m.db, 3, func(tx *gorm.DB) error {
+		// 1. Create file record
+		if err := m.CreateFile(tx, file); err != nil {
+			return fmt.Errorf("failed to create file record: %w", err)
 		}
-	}()
 
-	// Create file record
-	if err := m.CreateFile(tx, file); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create file record: %w", err)
+		// 2. Store shards
+		if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
+			return fmt.Errorf("failed to store shards: %w", err)
+		}
+
+		// 3. Save key fragments
+		if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
+			m.rsService.DeleteShards(file.ID) // clean up
+			return fmt.Errorf("failed to save key fragments: %w", err)
+		}
+
+		// 4. Update user storage
+		if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+			m.rsService.DeleteShards(file.ID)
+			return fmt.Errorf("failed to update storage usage: %w", err)
+		}
+
+		// 5. Log activity
+		activity := &ActivityLog{
+			UserID:       file.UserID,
+			ActivityType: "upload",
+			FileID:       &file.ID,
+			Status:       "success",
+			Details: fmt.Sprintf("File uploaded with %s encryption, %d shards",
+				file.EncryptionType, len(shards)),
+		}
+		if err := tx.Create(activity).Error; err != nil {
+			m.rsService.DeleteShards(file.ID)
+			return fmt.Errorf("failed to log activity: %w", err)
+		}
+
+		// If everything succeeded, return nil
+		return nil
+	})
+}
+
+func withTransactionRetry(db *gorm.DB, maxRetries int, fn func(tx *gorm.DB) error) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		tx := db.Begin()
+		if tx.Error != nil {
+			return tx.Error
+		}
+
+		err = fn(tx)
+		if err != nil {
+			tx.Rollback()
+
+			// Check if it's a deadlock (or use an error code check if your driver exposes it)
+			if strings.Contains(strings.ToLower(err.Error()), "deadlock") {
+				continue // retry
+			}
+			return err
+		}
+
+		err = tx.Commit().Error
+		if err == nil {
+			// Transaction committed successfully
+			return nil
+		}
+
+		// If commit fails due to deadlock, retry
+		if strings.Contains(strings.ToLower(err.Error()), "deadlock") {
+			continue
+		}
+		return err
 	}
-
-	// Store the Reed-Solomon shards
-	if err := m.rsService.StoreShards(file.ID, &services.FileShards{
-		Shards: shards,
-	}); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to store shards: %w", err)
-	}
-
-	// Save key fragments
-	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to save key fragments: %w", err)
-	}
-
-	// Update user storage
-	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to update storage usage: %w", err)
-	}
-
-	// Log activity with correct activity type
-	type ActivityLog struct {
-		UserID       uint
-		ActivityType string
-		FileID       *uint
-		Status       string
-		Details      string
-	}
-
-	activity := &ActivityLog{
-		UserID:       file.UserID,
-		ActivityType: "upload", // Changed from 'create' to 'upload'
-		FileID:       &file.ID,
-		Status:       "success",
-		Details: fmt.Sprintf("File uploaded with %s encryption, %d shards",
-			file.EncryptionType, len(shards)),
-	}
-
-	if err := tx.Create(activity).Error; err != nil {
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to log activity: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		m.rsService.DeleteShards(file.ID)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	// If we exhausted retries, return the last error
+	return err
 }
 
 // ReadFileShards retrieves and reconstructs the file content from shards
