@@ -25,21 +25,22 @@ type RouteHandlers struct {
 }
 
 type EndUserHandlers struct {
-	UploadFileController    *EndUser.UploadFileController
-	MassUploadController    *EndUser.MassUploadFileController
-	ViewFilesController     *EndUser.ViewFilesController
-	DownloadFileController  *EndUser.DownloadFileController
-	MassDownloadController  *EndUser.MassDownloadFileController
-	DeleteFileController    *EndUser.DeleteFileController
+	UploadFileController     *EndUser.UploadFileController
+	MassUploadController     *EndUser.MassUploadFileController
+	ViewFilesController      *EndUser.ViewFilesController
+	DownloadFileController   *EndUser.DownloadFileController
+	MassDownloadController   *EndUser.MassDownloadFileController
+	DeleteFileController     *EndUser.DeleteFileController
 	MassDeleteFileController *EndUser.MassDeleteFileController
-	ArchiveFileController   *EndUser.ArchiveFileController
+	ArchiveFileController    *EndUser.ArchiveFileController
 	MassArchiveController    *EndUser.MassArchiveFileController
-	ShareFileController     *EndUser.ShareFileController
-	CreateFolderController  *EndUser.CreateFolderController
-	ViewFolderController    *EndUser.ViewFolderController
-	DeleteFolderController  *EndUser.DeleteFolderController
-	PasswordResetController *EndUser.PasswordResetController
-	ViewStorageController   *EndUser.ViewStorageController
+	ShareFileController      *EndUser.ShareFileController
+	CreateFolderController   *EndUser.CreateFolderController
+	ViewFolderController     *EndUser.ViewFolderController
+	DeleteFolderController   *EndUser.DeleteFolderController
+	PasswordResetController  *EndUser.PasswordResetController
+	ViewStorageController    *EndUser.ViewStorageController
+	PaymentController        *EndUser.PaymentController
 }
 type PremiumUserHandlers struct {
 	FragmentController          *PremiumUser.FragmentController
@@ -102,21 +103,22 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
-			MassUploadController:    EndUser.NewMassUploadFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
-			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
-			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
-			MassDownloadController:  EndUser.NewMassDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
-			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
+			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
+			MassUploadController:     EndUser.NewMassUploadFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
+			ViewFilesController:      EndUser.NewViewFilesController(fileModel, folderModel),
+			DownloadFileController:   EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
+			MassDownloadController:   EndUser.NewMassDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
+			DeleteFileController:     EndUser.NewDeleteFileController(fileModel),
 			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
-			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
+			ArchiveFileController:    EndUser.NewArchiveFileController(fileModel),
 			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
-			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
-			CreateFolderController:  EndUser.NewCreateFolderController(folderModel, activityLogModel),
-			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
-			DeleteFolderController:  EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController: EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel),
-			ViewStorageController:   EndUser.NewViewStorageController(fileModel, userModel),
+			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
+			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
+			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
+			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel),
+			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
+			PaymentController:        EndUser.NewPaymentController(billingModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
@@ -200,6 +202,12 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	{
 		storage.GET("/info", handlers.ViewStorageController.GetStorageInfo)
 	}
+	payment := protected.Group("/payment")
+	{
+		payment.POST("/upgrade", handlers.PaymentController.ProcessPayment)
+		payment.GET("/status", handlers.PaymentController.GetPaymentStatus)
+	}
+
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
 	// Fragment management routes

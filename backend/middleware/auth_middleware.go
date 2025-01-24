@@ -13,6 +13,7 @@ import (
 
 func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Printf("Starting auth middleware\n")
 		authHeader := c.GetHeader("Authorization")
 		fmt.Println("Authorization header:", authHeader) // Debug log
 
@@ -89,6 +90,7 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 		}
 
 		// Set both "user" and "user_id" in context
+		fmt.Printf("Setting userID in context: %d\n", user.ID)
 		c.Set("user", user)
 		c.Set("user_id", user.ID)
 		fmt.Println("User successfully authenticated:", user)

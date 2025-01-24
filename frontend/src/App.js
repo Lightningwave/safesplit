@@ -4,6 +4,7 @@ import NavigationBar from './components/NavigationBar';
 import HomePage from './components/HomePage';
 import AboutPage from './components/AboutPage';
 import EndUserDashboard from './components/EndUserDashboard';
+import BillingPage from './components/BillingPage';
 import PremiumUserDashboard from './components/PremiumUserDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import SysAdminDashboard from './components/SysAdminDashboard';
@@ -90,6 +91,22 @@ function App() {
               />
             } 
           />
+            <Route 
+            path="/billing" 
+            element={
+              <ProtectedRoute 
+                element={(props) => (
+                  <BillingPage 
+                    {...props} 
+                    user={user} 
+                    onUpgradeSuccess={() => setUser({...user, role: 'premium_user'})}
+                  />
+                )}
+                allowedRoles={['end_user']} 
+                isAuthenticated={isRouteAccessible(['end_user'])}
+              />
+            }
+          />
           
           <Route 
             path="/premium-dashboard" 
@@ -123,6 +140,7 @@ function App() {
               />
             } 
           />
+
 
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />

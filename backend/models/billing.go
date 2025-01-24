@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"time"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -75,76 +76,56 @@ func NewBillingModel(db *gorm.DB, userModel *UserModel) *BillingModel {
 
 // CreateBillingProfile creates a new billing profile for a user
 func (m *BillingModel) CreateBillingProfile(profile *BillingProfile) error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		// Check if user already has a billing profile
-		var existingProfile BillingProfile
-		if err := tx.Where("user_id = ?", profile.UserID).First(&existingProfile).Error; err == nil {
-			return errors.New("user already has a billing profile")
-		}
+    return m.db.Transaction(func(tx *gorm.DB) error {
+        // Check if user already has a billing profile
+        var existingProfile BillingProfile
+        if err := tx.Where("user_id = ?", profile.UserID).First(&existingProfile).Error; err == nil {
+            return errors.New("user already has a billing profile")
+        }
 
-		// Create the billing profile
-		if err := tx.Create(profile).Error; err != nil {
-			return err
-		}
+        // Generate customer ID only if not provided
+        if profile.CustomerID == "" {
+            profile.CustomerID = fmt.Sprintf("CUST_%d_%s", profile.UserID, time.Now().Format("20060102"))
+        }
 
-		return nil
-	})
+        // Create the billing profile
+        if err := tx.Create(profile).Error; err != nil {
+            return fmt.Errorf("failed to create billing profile: %v", err)
+        }
+
+        return nil
+    })
 }
 
 // updateBillingProfile updates or creates a billing profile
-func (m *BillingModel) updateBillingProfile(tx *gorm.DB, userID uint, update *BillingProfileUpdate) error {
-	var profile BillingProfile
-	err := tx.Where("user_id = ?", userID).First(&profile).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Create new profile
-			profile = BillingProfile{
-				UserID:               userID,
-				BillingName:          update.BillingName,
-				BillingEmail:         update.BillingEmail,
-				BillingAddress:       update.BillingAddress,
-				DefaultPaymentMethod: update.PaymentMethod,
-				BillingCycle:         update.BillingCycle,
-				Currency:             update.Currency,
-				CountryCode:          update.CountryCode,
-				BillingStatus:        BillingStatusPending,
-			}
-			return tx.Create(&profile).Error
-		}
-		return err
-	}
-
-	// Update existing profile
-	updates := map[string]interface{}{}
-	if update.BillingName != "" {
-		updates["billing_name"] = update.BillingName
-	}
-	if update.BillingEmail != "" {
-		updates["billing_email"] = update.BillingEmail
-	}
-	if update.BillingAddress != "" {
-		updates["billing_address"] = update.BillingAddress
-	}
-	if update.PaymentMethod != "" {
-		updates["default_payment_method"] = update.PaymentMethod
-	}
-	if update.BillingCycle != "" {
-		updates["billing_cycle"] = update.BillingCycle
-	}
-	if update.Currency != "" {
-		updates["currency"] = update.Currency
-	}
-	if update.CountryCode != "" {
-		updates["country_code"] = update.CountryCode
-	}
-
-	if len(updates) > 0 {
-		return tx.Model(&profile).Updates(updates).Error
-	}
-
-	return nil
+func (m *BillingModel) UpdateBillingProfile(profile *BillingProfile) error {
+    return m.db.Transaction(func(tx *gorm.DB) error {
+        updates := map[string]interface{}{
+            "billing_name": profile.BillingName,
+            "billing_email": profile.BillingEmail,
+            "billing_address": profile.BillingAddress,
+            "country_code": profile.CountryCode,
+            "billing_cycle": profile.BillingCycle,
+            "billing_status": profile.BillingStatus,
+            "default_payment_method": profile.DefaultPaymentMethod,
+            "currency": profile.Currency,
+        }
+        
+        result := tx.Model(&BillingProfile{}).
+            Where("user_id = ?", profile.UserID).
+            Updates(updates)
+            
+        if result.Error != nil {
+            return fmt.Errorf("database error: %v", result.Error)
+        }
+        
+        if result.RowsAffected == 0 {
+            return fmt.Errorf("no profile found for user_id: %d", profile.UserID)
+        }
+        
+        return nil
+    })
 }
-
 // GetUserBillingProfile retrieves a user's billing profile
 func (m *BillingModel) GetUserBillingProfile(userID uint) (*BillingProfile, error) {
 	var profile BillingProfile
@@ -210,23 +191,28 @@ func (m *BillingModel) UpdateSubscriptionStatus(userID uint, status string) erro
 
 // CancelSubscription cancels user's subscription
 func (m *BillingModel) CancelSubscription(userID uint) error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		var user User
-		if err := tx.First(&user, userID).Error; err != nil {
-			return err
-		}
+    return m.db.Transaction(func(tx *gorm.DB) error {
+        var user User
+        if err := tx.First(&user, userID).Error; err != nil {
+            return err
+        }
 
-		if err := user.UpdateSubscription(tx, SubscriptionStatusCancelled); err != nil {
-			return err
-		}
+        // Check storage quota before downgrading
+        if user.StorageUsed > DefaultStorageQuota {
+            return ErrStorageExceedsQuota
+        }
 
-		return tx.Model(&BillingProfile{}).
-			Where("user_id = ?", userID).
-			Updates(map[string]interface{}{
-				"billing_status":    BillingStatusCancelled,
-				"next_billing_date": nil,
-			}).Error
-	})
+        if err := user.UpdateSubscription(tx, SubscriptionStatusCancelled); err != nil {
+            return err
+        }
+
+        return tx.Model(&BillingProfile{}).
+            Where("user_id = ?", userID).
+            Updates(map[string]interface{}{
+                "billing_status":    BillingStatusCancelled,
+                "next_billing_date": nil,
+            }).Error
+    })
 }
 
 // GetSubscriptionStats gets billing statistics
@@ -256,3 +242,4 @@ func (m *BillingModel) GetExpiringSubscriptions(days int) ([]BillingProfile, err
 
 	return profiles, err
 }
+
