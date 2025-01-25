@@ -22,6 +22,8 @@ const (
 	BillingStatusFailed    = "failed"
 	BillingStatusCancelled = "cancelled"
 )
+var ErrStorageExceedsQuota = errors.New("cannot downgrade: storage usage exceeds free tier quota")
+
 
 type BillingProfile struct {
 	ID                   uint       `json:"id" gorm:"primaryKey"`
@@ -197,20 +199,20 @@ func (m *BillingModel) CancelSubscription(userID uint) error {
             return err
         }
 
-        // Check storage quota before downgrading
+        // Check storage quota before scheduling downgrade
         if user.StorageUsed > DefaultStorageQuota {
             return ErrStorageExceedsQuota
         }
 
-        if err := user.UpdateSubscription(tx, SubscriptionStatusCancelled); err != nil {
+        // Keep subscription active until next billing date
+        var profile BillingProfile
+        if err := tx.Where("user_id = ?", userID).First(&profile).Error; err != nil {
             return err
         }
 
-        return tx.Model(&BillingProfile{}).
-            Where("user_id = ?", userID).
+        return tx.Model(&profile).
             Updates(map[string]interface{}{
-                "billing_status":    BillingStatusCancelled,
-                "next_billing_date": nil,
+                "billing_status": BillingStatusCancelled,
             }).Error
     })
 }

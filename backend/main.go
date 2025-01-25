@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"safesplit/config"
+	"safesplit/jobs"
 	"safesplit/models"
 	"safesplit/routes"
 	"safesplit/services"
@@ -23,12 +24,16 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+	// Initialize subscription handler and scheduler
+	subscriptionHandler := jobs.NewSubscriptionHandler(db)
+	jobs.StartSubscriptionScheduler(subscriptionHandler)
 
 	// Initialize distributed storage service
 	storageService, err := services.NewDistributedStorageService(baseStoragePath, nodeCount)
 	if err != nil {
 		log.Fatal("Failed to initialize distributed storage:", err)
 	}
+	// Initialize subscription handler
 
 	// Initialize server master key
 	serverMasterKeyModel := models.NewServerMasterKeyModel(db)

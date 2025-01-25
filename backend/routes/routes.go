@@ -41,6 +41,7 @@ type EndUserHandlers struct {
 	PasswordResetController  *EndUser.PasswordResetController
 	ViewStorageController    *EndUser.ViewStorageController
 	PaymentController        *EndUser.PaymentController
+	SubscriptionController   *EndUser.SubscriptionController
 }
 type PremiumUserHandlers struct {
 	FragmentController          *PremiumUser.FragmentController
@@ -119,6 +120,7 @@ func NewRouteHandlers(
 			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel),
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
+			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
@@ -206,6 +208,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	{
 		payment.POST("/upgrade", handlers.PaymentController.ProcessPayment)
 		payment.GET("/status", handlers.PaymentController.GetPaymentStatus)
+		payment.POST("/cancel", handlers.SubscriptionController.CancelSubscription)
 	}
 
 }
