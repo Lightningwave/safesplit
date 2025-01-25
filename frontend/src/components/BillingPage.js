@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Check } from 'lucide-react';
+import { AlertCircle, Check, CreditCard } from 'lucide-react';
 
 const BillingPage = ({ user, onUpgradeSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -13,18 +13,70 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
     expiryYear: '',
     cardHolder: '',
     billingCycle: 'monthly',
-    // Billing details
     billingName: '',
     billingEmail: '',
     billingAddress: '',
     countryCode: ''
   });
 
+  const formatCardNumber = (number) => {
+    const digits = number.replace(/\D/g, '');
+    const groups = [];
+    for (let i = 0; i < digits.length && i < 16; i += 4) {
+      groups.push(digits.slice(i, i + 4));
+    }
+    return groups.join(' ');
+  };
+
+  const getCardType = (number) => {
+    const cleaned = number.replace(/\D/g, '');
+    if (!cleaned) return null;
+    
+    const patterns = {
+      visa: /^4/,
+      mastercard: /^5[1-5]/,
+      amex: /^3[47]/,
+      discover: /^6(?:011|5)/
+    };
+
+    for (const [card, pattern] of Object.entries(patterns)) {
+      if (pattern.test(cleaned)) return card;
+    }
+    return null;
+  };
+
+  const validateCard = () => {
+    const cardNumber = billingInfo.cardNumber.replace(/\s/g, '');
+    if (cardNumber.length < 12 || cardNumber.length > 19) {
+      throw new Error('Card number must be between 12 and 19 digits');
+    }
+    
+    const cardType = getCardType(cardNumber);
+    if (!cardType) {
+      throw new Error('Invalid card type');
+    }
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear() % 100;
+    const currentMonth = currentDate.getMonth() + 1;
+
+    const expiryYear = parseInt(billingInfo.expiryYear);
+    const expiryMonth = parseInt(billingInfo.expiryMonth);
+
+    if (expiryYear < currentYear || 
+        (expiryYear === currentYear && expiryMonth < currentMonth)) {
+      throw new Error('Card has expired');
+    }
+
+    return true;
+  };
+
   const handleUpgrade = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      validateCard();
       const token = localStorage.getItem('token');
 
       const paymentResponse = await fetch('http://localhost:8080/api/payment/upgrade', {
@@ -34,16 +86,16 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          CardNumber: billingInfo.cardNumber,
-          CVV: billingInfo.cvv,
-          ExpiryMonth: parseInt(billingInfo.expiryMonth),
-          ExpiryYear: parseInt('20' + billingInfo.expiryYear),
-          CardHolder: billingInfo.cardHolder,
-          BillingCycle: billingInfo.billingCycle,
-          BillingName: billingInfo.billingName,
-          BillingEmail: billingInfo.billingEmail,
-          BillingAddress: billingInfo.billingAddress,
-          CountryCode: billingInfo.countryCode
+          cardNumber: billingInfo.cardNumber.replace(/\s/g, ''),
+          cvv: billingInfo.cvv,
+          expiryMonth: parseInt(billingInfo.expiryMonth),
+          expiryYear: parseInt('20' + billingInfo.expiryYear),
+          cardHolder: billingInfo.cardHolder,
+          billingCycle: billingInfo.billingCycle,
+          billingName: billingInfo.billingName,
+          billingEmail: billingInfo.billingEmail,
+          billingAddress: billingInfo.billingAddress,
+          countryCode: billingInfo.countryCode
         })
       });
 
@@ -145,13 +197,27 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Card Number</label>
-                  <input className="w-full p-2 border rounded-md" required
-                    value={billingInfo.cardNumber}
-                    onChange={e => setBillingInfo({
-                      ...billingInfo,
-                      cardNumber: e.target.value.replace(/\D/g, '').slice(0, 16)
-                    })}
-                  />
+                  <div className="relative">
+                    <input 
+                      className="w-full p-2 pr-10 border rounded-md font-mono"
+                      required
+                      value={formatCardNumber(billingInfo.cardNumber)}
+                      onChange={e => setBillingInfo({
+                        ...billingInfo,
+                        cardNumber: e.target.value.replace(/\D/g, '')
+                      })}
+                      placeholder="1234 5678 9012 3456"
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      {getCardType(billingInfo.cardNumber) ? (
+                        <span className="font-medium text-gray-700 uppercase">
+                          {getCardType(billingInfo.cardNumber)}
+                        </span>
+                      ) : (
+                        <CreditCard className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
