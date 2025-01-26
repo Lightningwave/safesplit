@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"safesplit/config"
 	"safesplit/jobs"
 	"safesplit/models"
 	"safesplit/routes"
 	"safesplit/services"
+	"strconv"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -17,13 +20,39 @@ const (
 	baseStoragePath = "storage"
 	nodeCount       = 3
 )
-
+func init() {
+    if err := godotenv.Load(); err != nil {  
+        log.Fatal("Error loading .env file")
+    }
+}
 func main() {
 	// Initialize database connection
 	db, err := config.SetupDatabase()
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+	// Initialize SMTP config from environment
+	smtpConfig := services.SMTPConfig{
+		Host: os.Getenv("SMTP_HOST"),
+		Port: func() int {
+			port, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
+			if err != nil {
+				return 587
+			}
+			return port
+		}(),
+		Username:  os.Getenv("SMTP_USERNAME"),
+		Password:  os.Getenv("SMTP_PASSWORD"),
+		FromName:  os.Getenv("SMTP_FROM_NAME"),
+		FromEmail: os.Getenv("SMTP_FROM_EMAIL"),
+	}
+	// Initialize email services
+	emailService, err := services.NewSMTPEmailService(smtpConfig)
+	if err != nil {
+		log.Fatal("Failed to initialize email service:", err)
+	}
+	twoFactorService := services.NewTwoFactorAuthService(emailService)
+
 	// Initialize subscription handler and scheduler
 	subscriptionHandler := jobs.NewSubscriptionHandler(db)
 	jobs.StartSubscriptionScheduler(subscriptionHandler)
@@ -42,7 +71,7 @@ func main() {
 	}
 
 	// Initialize all required models
-	userModel := models.NewUserModel(db)
+	userModel := models.NewUserModel(db, twoFactorService)
 	passwordHistoryModel := models.NewPasswordHistoryModel(db)
 	billingModel := models.NewBillingModel(db, userModel)
 	activityLogModel := models.NewActivityLogModel(db)
@@ -93,6 +122,7 @@ func main() {
 		shamirService,
 		compressionService,
 		rsService,
+		twoFactorService,
 	)
 
 	// Set up the Gin router with default middleware
