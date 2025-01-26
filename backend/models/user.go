@@ -77,14 +77,17 @@ type User struct {
 }
 
 type UserModel struct {
-	db *gorm.DB
+	db               *gorm.DB
+	twoFactorService *services.TwoFactorAuthService
 }
 
-func NewUserModel(db *gorm.DB) *UserModel {
-	return &UserModel{db: db}
+func NewUserModel(db *gorm.DB, twoFactorService *services.TwoFactorAuthService) *UserModel {
+	return &UserModel{
+		db:               db,
+		twoFactorService: twoFactorService,
+	}
 }
 
-// BeforeCreate hook to set up user security fields
 // BeforeCreate hook to set up user security fields
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	// Hash password
@@ -740,4 +743,41 @@ func (u *User) IsSuperAdmin() bool {
 // HasAvailableStorage checks if the user has enough storage for the given size
 func (u *User) HasAvailableStorage(size int64) bool {
 	return u.StorageUsed+size <= u.StorageQuota
+}
+
+// InitiateEmailTwoFactor starts the email 2FA process
+func (m *UserModel) InitiateEmailTwoFactor(userID uint) error {
+	user, err := m.FindByID(userID)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	if !user.IsActive {
+		return errors.New("account is not active")
+	}
+
+	return m.twoFactorService.SendTwoFactorToken(userID, user.Email)
+}
+
+// VerifyEmailTwoFactor verifies the email 2FA token
+func (m *UserModel) VerifyEmailTwoFactor(userID uint, token string) error {
+	if err := m.twoFactorService.VerifyToken(userID, token); err != nil {
+		return err
+	}
+
+	return m.db.Model(&User{}).Where("id = ?", userID).Update("two_factor_enabled", true).Error
+}
+
+// EnableEmailTwoFactor enables email-based 2FA
+func (m *UserModel) EnableEmailTwoFactor(userID uint) error {
+	return m.db.Model(&User{}).
+		Where("id = ?", userID).
+		Update("two_factor_enabled", true).Error
+}
+
+// DisableEmailTwoFactor disables email-based 2FA
+func (m *UserModel) DisableEmailTwoFactor(userID uint) error {
+	return m.db.Model(&User{}).
+		Where("id = ?", userID).
+		Update("two_factor_enabled", false).Error
 }

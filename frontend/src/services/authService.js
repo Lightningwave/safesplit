@@ -1,17 +1,24 @@
 const API_BASE_URL = 'http://localhost:8080/api';
 
-export const loginSuperAdmin = async (email, password) => {
+export const loginSuperAdmin = async (email, password, twoFactorCode = '') => {
     try {
         const response = await fetch(`${API_BASE_URL}/super-login`, { 
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, two_factor_code: twoFactorCode }),
         });
 
         const data = await response.json();
         
+        if (response.status === 202) {
+            return {
+                requires_2fa: true,
+                user_id: data.user_id
+            };
+        }
+
         if (!response.ok) {
             throw new Error(data.error || 'Authentication failed');
         }
@@ -31,25 +38,27 @@ export const loginSuperAdmin = async (email, password) => {
     }
 };
 
-export const login = async (email, password) => {
+export const login = async (email, password, twoFactorCode = '') => {
     try {
         const response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, two_factor_code: twoFactorCode }),
         });
 
         const data = await response.json();
+
+        if (response.status === 202) {
+            return {
+                requires_2fa: true,
+                user_id: data.user_id
+            };
+        }
         
         if (!response.ok) {
             throw new Error(data.error || 'Login failed');
-        }
-
-        // Prevent super admin login through regular login
-        if (data.data.user.role === 'super_admin') {
-            throw new Error('Please use super admin login page');
         }
 
         localStorage.setItem('token', data.token);
@@ -91,10 +100,12 @@ export const register = async (username, email, password) => {
         throw error;
     }
 };
+
 export const getCurrentBilling = () => {
     const billing = localStorage.getItem('billing');
     return billing ? JSON.parse(billing) : null;
 };
+
 export const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

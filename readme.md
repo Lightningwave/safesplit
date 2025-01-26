@@ -91,6 +91,7 @@ go get github.com/hashicorp/vault/shamir
 go get golang.org/x/crypto/chacha20poly1305
 go get golang.org/x/crypto/twofish
 go get github.com/braintree-go/braintree-go
+go get github.com/joho/godotenv
 
 
 

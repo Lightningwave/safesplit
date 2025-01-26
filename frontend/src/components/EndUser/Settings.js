@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
 import PasswordReset from './PasswordReset';
 import ViewStorage from './ViewStorage';
+import TwoFactorSettings from './TwoFactorAuthentication';
 
 const Settings = ({ user: initialUser, onUserUpdate }) => {
     const [activeTab, setActiveTab] = useState('account');
@@ -176,15 +177,7 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
 
             {activeTab === 'password' && <PasswordReset />}
             
-            {activeTab === '2fa' && (
-                <div>
-                    <h2 className="text-xl font-semibold mb-4">Setup Two-Factor Authentication</h2>
-                    <p className="mb-4">Enable Two-Factor Authentication for increased account security.</p>
-                    <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
-                        Enable 2FA
-                    </button>
-                </div>
-            )}
+            {activeTab === '2fa' && <TwoFactorSettings />}
 
             {activeTab === 'storage' && <ViewStorage user={currentUser} />}
 

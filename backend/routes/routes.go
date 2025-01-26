@@ -18,6 +18,7 @@ type RouteHandlers struct {
 	LoginController           *controllers.LoginController
 	SuperAdminLoginController *SuperAdmin.LoginController
 	CreateAccountController   *controllers.CreateAccountController
+	TwoFactorController      *EndUser.TwoFactorController
 	SuperAdminHandlers        *SuperAdminHandlers
 	SysAdminHandlers          *SysAdminHandlers
 	EndUserHandlers           *EndUserHandlers
@@ -82,12 +83,14 @@ func NewRouteHandlers(
 	shamirService *services.ShamirService,
 	compressionService *services.CompressionService,
 	rsService *services.ReedSolomonService,
+	twoFactorService *services.TwoFactorAuthService,
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
 		LoginController:           controllers.NewLoginController(userModel, billingModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
+		TwoFactorController: EndUser.NewTwoFactorController(userModel),
 		SuperAdminHandlers: &SuperAdminHandlers{
 			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
@@ -154,6 +157,14 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 
 func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	protected.GET("/me", handlers.LoginController.GetMe)
+
+	// 2FA routes
+    twoFactor := protected.Group("/2fa")
+{
+    twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
+    twoFactor.POST("/disable", handlers.TwoFactorController.DisableEmailTwoFactor)
+    twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
+}
 
 	// End User routes should be first as they're most commonly accessed
 	setupEndUserRoutes(protected, handlers.EndUserHandlers)
