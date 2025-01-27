@@ -105,8 +105,18 @@ func (s *TwoFactorAuthService) SendTwoFactorToken(userID uint, email string) err
 	s.attempts[userID] = 0
 	s.mu.Unlock()
 
-	subject := "Two-Factor Authentication Code"
-	body := fmt.Sprintf("Your authentication code is: %s\nThis code will expire in 10 minutes.", token)
+	subject := "Your Two-Factor Authentication Code"
+	body := fmt.Sprintf(`Hello,
+
+Your two-factor authentication code is:
+**%s**
+
+This code will expire in **10 minutes**. Please use it to complete your login process.
+
+If you didn't request this code, please ignore this email or contact our support team immediately.
+
+Sincerely,
+Safesplit team`, token)
 
 	return s.emailSender.SendEmail(email, subject, body)
 }
