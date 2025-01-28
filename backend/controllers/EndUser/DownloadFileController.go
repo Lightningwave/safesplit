@@ -30,7 +30,7 @@ func NewDownloadFileController(
 	activityLogModel *models.ActivityLogModel,
 	compressionService *services.CompressionService,
 	rsService *services.ReedSolomonService,
-	serverKeyModel *models.ServerMasterKeyModel, 
+	serverKeyModel *models.ServerMasterKeyModel,
 ) *DownloadFileController {
 	return &DownloadFileController{
 		fileModel:          fileModel,
@@ -39,7 +39,7 @@ func NewDownloadFileController(
 		activityLogModel:   activityLogModel,
 		compressionService: compressionService,
 		rsService:          rsService,
-		serverKeyModel:     serverKeyModel, 
+		serverKeyModel:     serverKeyModel,
 	}
 }
 
@@ -232,6 +232,35 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 		return nil, err
 	}
 
+	// Derive the user's KEK
+	kek, err := services.DeriveKeyEncryptionKey(currentUser.Password, currentUser.MasterKeySalt)
+	if err != nil {
+		log.Printf("Failed to derive KEK: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to derive KEK",
+		})
+		return nil, err
+	}
+
+	// Decrypt the user's master key
+	decryptedMasterKey, err := services.DecryptMasterKey(
+		currentUser.EncryptedMasterKey,
+		kek,
+		currentUser.MasterKeyNonce,
+	)
+	if err != nil {
+		log.Printf("Failed to decrypt master key: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to decrypt master key",
+		})
+		return nil, err
+	}
+
+	// Use first 32 bytes of decrypted master key
+	userMasterKey := decryptedMasterKey[:32]
+
 	// Get fragments with their data
 	fragments, err := c.keyFragmentModel.GetKeyFragments(file.ID)
 	if err != nil {
@@ -255,15 +284,14 @@ func (c *DownloadFileController) getKeyShares(ctx *gin.Context, file *models.Fil
 			decryptedFragment, err = services.DecryptMasterKey(
 				fragment.Data,
 				serverKeyData,
-				fragment.KeyFragment.EncryptionNonce[:12],
+				fragment.KeyFragment.EncryptionNonce,
 			)
 		} else {
-			log.Printf("Decrypting user fragment %d with user master key", i)
-			userMasterKey := currentUser.EncryptedMasterKey[:32]
+			log.Printf("Decrypting user fragment %d with decrypted user master key", i)
 			decryptedFragment, err = services.DecryptMasterKey(
 				fragment.Data,
 				userMasterKey,
-				fragment.KeyFragment.EncryptionNonce[:12],
+				fragment.KeyFragment.EncryptionNonce,
 			)
 		}
 

@@ -6,14 +6,15 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-    "log"
+	"log"
+
 	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
-	MasterKeySize     = 32 
+	MasterKeySize     = 32
 	PBKDF2Iterations  = 100000
-	KeyEncryptionSize = 32 
+	KeyEncryptionSize = 32
 )
 
 // GenerateMasterKey generates a new random master key
@@ -31,70 +32,78 @@ func DeriveKeyEncryptionKey(password string, salt []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid salt length: expected 32, got %d", len(salt))
 	}
 
+	log.Printf("Deriving KEK - Salt: %x", salt)
+	log.Printf("Password length: %d bytes", len(password))
+
 	kek := pbkdf2.Key([]byte(password), salt, PBKDF2Iterations, KeyEncryptionSize, sha256.New)
+	log.Printf("Derived KEK: %x", kek)
+
 	return kek, nil
 }
 
-// EncryptMasterKey encrypts the master key using AES-GCM
+// EncryptMasterKey encrypts using AES-GCM with 16-byte nonce
 func EncryptMasterKey(data []byte, key []byte, nonce []byte) ([]byte, error) {
-    // Key should be exactly 32 bytes
-    if len(key) != 32 {
-        return nil, fmt.Errorf("invalid master key length: expected 32, got %d", len(key))
-    }
-
-    // Nonce should be exactly 12 bytes for GCM
-    if len(nonce) != 12 {
-        nonce = nonce[:12]
-    }
-
-    // Log input parameters
-    log.Printf("EncryptMasterKey input - Data length: %d, Key length: %d, Nonce length: %d",
-        len(data), len(key), len(nonce))
-    log.Printf("Data hex: %x", data)
-    log.Printf("Key hex: %x", key)
-    log.Printf("Nonce hex: %x", nonce)
-
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create cipher: %w", err)
-    }
-
-    gcm, err := cipher.NewGCM(block)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create GCM: %w", err)
-    }
-
-    // Encrypt data
-    encryptedData := gcm.Seal(nil, nonce, data, nil)
-    log.Printf("Encrypted result length: %d bytes, Value: %x", len(encryptedData), encryptedData)
-
-    return encryptedData, nil
-}
-
-// DecryptMasterKey decrypts the master key using AES-GCM
-func DecryptMasterKey(encryptedKey []byte, kek []byte, nonce []byte) ([]byte, error) {
-	if len(kek) != KeyEncryptionSize {
-		return nil, fmt.Errorf("invalid key encryption key length: expected %d, got %d", KeyEncryptionSize, len(kek))
+	if len(key) != 32 {
+		return nil, fmt.Errorf("invalid key length: expected 32, got %d", len(key))
 	}
-	if len(nonce) != 12 {
-		return nil, fmt.Errorf("invalid nonce length: expected 12, got %d", len(nonce))
+	if len(nonce) != 16 {
+		return nil, fmt.Errorf("invalid nonce length: expected 16, got %d", len(nonce))
 	}
 
-	block, err := aes.NewCipher(kek)
+	log.Printf("EncryptMasterKey - Data length: %d", len(data))
+	log.Printf("Key: %x", key)
+	log.Printf("Nonce: %x", nonce)
+
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	// Decrypt master key
-	masterKey, err := gcm.Open(nil, nonce, encryptedKey, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt master key: %w", err)
+	encrypted := gcm.Seal(nil, nonce, data, nil)
+	log.Printf("Encrypted result - Length: %d, Value: %x", len(encrypted), encrypted)
+	return encrypted, nil
+}
+
+// DecryptMasterKey decrypts using AES-GCM with 16-byte nonce
+func DecryptMasterKey(encryptedKey []byte, key []byte, nonce []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("invalid key length: expected 32, got %d", len(key))
+	}
+	if len(nonce) != 16 {
+		return nil, fmt.Errorf("invalid nonce length: expected 16, got %d", len(nonce))
 	}
 
-	return masterKey, nil
+	// Take first 48 bytes for decryption
+	encryptedKey = encryptedKey[:48]
+
+	log.Printf("Original Encrypted Master Key Length: %d", len(encryptedKey))
+	log.Printf("Original Encrypted Master Key: %x", encryptedKey)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	log.Printf("DecryptMasterKey Debug:")
+	log.Printf("- Encrypted Key Len: %d", len(encryptedKey))
+	log.Printf("- KEK: %x", key)
+	log.Printf("- Nonce: %x", nonce)
+	log.Printf("- GCM NonceSize: %d", gcm.NonceSize())
+
+	decrypted, err := gcm.Open(nil, nonce, encryptedKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return decrypted, nil
 }

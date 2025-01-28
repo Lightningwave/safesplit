@@ -120,7 +120,7 @@ func NewRouteHandlers(
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel,keyRotationModel,keyFragmentModel,fileModel,),
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),

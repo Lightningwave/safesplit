@@ -50,7 +50,7 @@ CREATE TABLE server_master_keys (
 
 -- Key rotation history table
 -- Purpose: Tracks key rotation events
-CREATE TABLE key_rotation_history (
+CREATE TABLE key_rotation_histories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     old_key_version INT NOT NULL,

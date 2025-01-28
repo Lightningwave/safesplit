@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"log"
 	"safesplit/services"
 	"safesplit/utils"
 	"strconv"
@@ -90,46 +91,39 @@ func NewUserModel(db *gorm.DB, twoFactorService *services.TwoFactorAuthService) 
 
 // BeforeCreate hook to set up user security fields
 func (u *User) BeforeCreate(tx *gorm.DB) error {
-	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 	u.Password = string(hashedPassword)
 
-	// Generate master key
 	masterKey, err := services.GenerateMasterKey()
 	if err != nil {
 		return fmt.Errorf("failed to generate master key: %w", err)
 	}
 
-	// Generate salt
 	salt, err := utils.GenerateSalt()
 	if err != nil {
-		return fmt.Errorf("failed to generate salt: %w", err)
+		return err
 	}
 	u.MasterKeySalt = salt
 
-	// Generate nonce
 	nonce, err := utils.GenerateNonce()
 	if err != nil {
-		return fmt.Errorf("failed to generate nonce: %w", err)
+		return err
 	}
 	u.MasterKeyNonce = nonce
 
-	// Derive key encryption key from password using salt
-	kek, err := services.DeriveKeyEncryptionKey(u.Password, salt)
+	// Use hashed password for KEK derivation
+	kek, err := services.DeriveKeyEncryptionKey(string(hashedPassword), salt)
 	if err != nil {
 		return fmt.Errorf("failed to derive key encryption key: %w", err)
 	}
 
-	// Encrypt master key
 	encryptedKey, err := services.EncryptMasterKey(masterKey, kek, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt master key: %w", err)
 	}
-
-	// Set encrypted master key and version
 	u.EncryptedMasterKey = encryptedKey
 	u.MasterKeyVersion = 1
 
@@ -140,44 +134,13 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 func (m *UserModel) Create(user *User) (*User, error) {
 	var createdUser *User
 	err := m.db.Transaction(func(tx *gorm.DB) error {
-		// Generate salt and nonce (BeforeCreate hook will handle this)
 		if err := tx.Create(user).Error; err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
-
-		// Generate and encrypt master key using password
-		masterKey, err := services.GenerateMasterKey()
-		if err != nil {
-			return fmt.Errorf("failed to generate master key: %w", err)
-		}
-
-		// Derive key encryption key from password using salt
-		kek, err := services.DeriveKeyEncryptionKey(user.Password, user.MasterKeySalt)
-		if err != nil {
-			return fmt.Errorf("failed to derive key encryption key: %w", err)
-		}
-
-		// Encrypt master key
-		encryptedKey, err := services.EncryptMasterKey(masterKey, kek, user.MasterKeyNonce)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt master key: %w", err)
-		}
-
-		// Update user with encrypted master key
-		user.EncryptedMasterKey = encryptedKey
-		if err := tx.Save(user).Error; err != nil {
-			return fmt.Errorf("failed to save encrypted master key: %w", err)
-		}
-
 		createdUser = user
 		return nil
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return createdUser, nil
+	return createdUser, err
 }
 
 // Authenticate checks the provided email and password
@@ -279,7 +242,7 @@ func (m *UserModel) RotateMasterKey(userID uint, newEncryptedKey []byte, rotatio
 
 		// Verify rotation type is valid
 		switch rotationType {
-		case RotationTypeAutomatic, RotationTypeManual, RotationTypeForced, RotationTypePassword:
+		case RotationTypeAutomatic, RotationTypeManual, RotationTypeForced:
 			// Valid rotation type
 		default:
 			return fmt.Errorf("invalid rotation type: %s", rotationType)
@@ -396,12 +359,6 @@ func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword stri
 			return errors.New("current password is incorrect")
 		}
 
-		// Generate new password hash
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-
 		// Store the old password in history
 		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
 			return err
@@ -410,7 +367,7 @@ func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword stri
 		// Update password and related fields
 		now := time.Now()
 		updates := map[string]interface{}{
-			"password":              string(hashedPassword),
+			"password":              string(newPassword),
 			"last_password_change":  now,
 			"force_password_change": false,
 		}
@@ -432,7 +389,7 @@ func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword stri
 				UserID:        userID,
 				OldKeyVersion: user.MasterKeyVersion,
 				NewKeyVersion: user.MasterKeyVersion + 1,
-				RotationType:  "password_change",
+				RotationType:  RotationTypeAutomatic,
 			}
 
 			if err := tx.Create(&rotation).Error; err != nil {
@@ -780,4 +737,248 @@ func (m *UserModel) DisableEmailTwoFactor(userID uint) error {
 	return m.db.Model(&User{}).
 		Where("id = ?", userID).
 		Update("two_factor_enabled", false).Error
+}
+
+func (m *UserModel) ResetPasswordWithFragments(
+	userID uint,
+	currentPassword string,
+	newPassword string,
+	passwordHistoryModel *PasswordHistoryModel,
+	keyFragmentModel *KeyFragmentModel,
+	fileModel *FileModel,
+) error {
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := tx.First(&user, userID).Error; err != nil {
+			return fmt.Errorf("user not found: %w", err)
+		}
+
+		// Verify current password first
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
+			return fmt.Errorf("current password is incorrect")
+		}
+
+		// Get original encrypted master key
+		originalEncryptedKey := user.EncryptedMasterKey
+		log.Printf("Current encrypted master key: %x", originalEncryptedKey)
+
+		// Derive current KEK
+		currentKEK, err := services.DeriveKeyEncryptionKey(user.Password, user.MasterKeySalt)
+		if err != nil {
+			return fmt.Errorf("failed to derive current KEK: %w", err)
+		}
+
+		// First decrypt master key with current KEK
+		decryptedMasterKey, err := services.DecryptMasterKey(originalEncryptedKey, currentKEK, user.MasterKeyNonce)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt master key: %w", err)
+		}
+
+		// Hash new password and derive new KEK
+		hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash new password: %w", err)
+		}
+
+		newKEK, err := services.DeriveKeyEncryptionKey(string(hashedNewPassword), user.MasterKeySalt)
+		if err != nil {
+			return fmt.Errorf("failed to derive new KEK: %w", err)
+		}
+
+		// Generate new nonce for master key
+		masterKeyNonce, err := utils.GenerateNonce()
+		if err != nil {
+			return fmt.Errorf("failed to generate nonce: %w", err)
+		}
+
+		// Re-encrypt master key with new KEK
+		newEncryptedMasterKey, err := services.EncryptMasterKey(decryptedMasterKey, newKEK, masterKeyNonce)
+		if err != nil {
+			return fmt.Errorf("failed to re-encrypt master key: %w", err)
+		}
+
+		log.Printf("New encrypted master key: %x", newEncryptedMasterKey)
+
+		// Process fragments
+		files, err := fileModel.ListAllUserFiles(userID)
+		if err != nil {
+			return fmt.Errorf("failed to get user files: %w", err)
+		}
+
+		// Use decrypted master key for fragments
+		userMasterKey := decryptedMasterKey[:32]
+
+		for _, file := range files {
+			fragments, err := keyFragmentModel.GetUserFragmentsForFile(file.ID)
+			if err != nil {
+				return fmt.Errorf("failed to get key fragments for file %d: %w", file.ID, err)
+			}
+
+			for _, fragment := range fragments {
+				log.Printf("Processing fragment %d for file %d", fragment.FragmentIndex, file.ID)
+				log.Printf("Fragment data before decryption: %x", fragment.Data)
+				log.Printf("Fragment nonce: %x", fragment.EncryptionNonce)
+
+				if fragment.MasterKeyVersion != nil {
+					log.Printf("Fragment key version: %d", *fragment.MasterKeyVersion)
+				}
+
+				// Decrypt fragment with current decrypted master key
+				decryptedFragment, err := services.DecryptMasterKey(
+					fragment.Data,
+					userMasterKey, 
+					fragment.EncryptionNonce,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to decrypt fragment %d for file %d: %w",
+						fragment.FragmentIndex, file.ID, err)
+				}
+
+				log.Printf("Successfully decrypted fragment: %x", decryptedFragment)
+
+				// Generate new nonce for fragment
+				newFragmentNonce, err := utils.GenerateNonce()
+				if err != nil {
+					return fmt.Errorf("failed to generate nonce for fragment: %w", err)
+				}
+
+				// Re-encrypt with same decrypted master key 
+				newEncryptedFragment, err := services.EncryptMasterKey(
+					decryptedFragment,
+					userMasterKey, 
+					newFragmentNonce,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to re-encrypt fragment: %w", err)
+				}
+
+				log.Printf("Re-encrypted fragment result: %x", newEncryptedFragment)
+
+				// Store re-encrypted fragment
+				if err := keyFragmentModel.storage.StoreFragment(
+					fragment.NodeIndex,
+					fragment.FragmentPath,
+					newEncryptedFragment,
+				); err != nil {
+					return fmt.Errorf("failed to store fragment: %w", err)
+				}
+
+				// Update fragment metadata
+				newVersion := user.MasterKeyVersion + 1
+				if err := tx.Model(&fragment.KeyFragment).Updates(map[string]interface{}{
+					"encryption_nonce":   newFragmentNonce,
+					"master_key_version": newVersion,
+				}).Error; err != nil {
+					return fmt.Errorf("failed to update fragment metadata: %w", err)
+				}
+
+				log.Printf("Successfully updated fragment %d for file %d to version %d",
+					fragment.FragmentIndex, file.ID, newVersion)
+			}
+		}
+
+		// Store password history
+		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+			return fmt.Errorf("failed to store password history: %w", err)
+		}
+
+		// Update user record
+		now := time.Now()
+		updates := map[string]interface{}{
+			"password":              string(hashedNewPassword),
+			"encrypted_master_key":  newEncryptedMasterKey,
+			"master_key_nonce":      masterKeyNonce,
+			"master_key_version":    user.MasterKeyVersion + 1,
+			"key_last_rotated":      now,
+			"last_password_change":  now,
+			"force_password_change": false,
+		}
+
+		if err := tx.Model(&user).Updates(updates).Error; err != nil {
+			return fmt.Errorf("failed to update user: %w", err)
+		}
+
+		return nil
+	})
+}
+func (m *UserModel) updateKeyFragments(
+	tx *gorm.DB,
+	userID uint,
+	oldMasterKey []byte,
+	newMasterKey []byte,
+	keyFragmentModel *KeyFragmentModel,
+	fileModel *FileModel,
+) error {
+	files, err := fileModel.ListAllUserFiles(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user files: %w", err)
+	}
+
+	// Get the decrypted master key for the user
+	decryptedMasterKey := newMasterKey
+	for _, file := range files {
+		fragments, err := keyFragmentModel.GetUserFragmentsForFile(file.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get key fragments for file %d: %w", file.ID, err)
+		}
+
+		for _, fragment := range fragments {
+			log.Printf("Processing fragment %d for file %d", fragment.FragmentIndex, file.ID)
+			log.Printf("Fragment nonce length: %d", len(fragment.EncryptionNonce))
+			log.Printf("Fragment data length: %d", len(fragment.Data))
+
+			// Decrypt fragment using old master key
+			decryptedFragment, err := services.DecryptMasterKey(
+				fragment.Data,
+				oldMasterKey, 
+				fragment.EncryptionNonce,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to decrypt fragment %d for file %d: %w",
+					fragment.FragmentIndex, file.ID, err)
+			}
+
+			// Generate new nonce
+			newNonce, err := utils.GenerateNonce()
+			if err != nil {
+				return fmt.Errorf("failed to generate nonce: %w", err)
+			}
+
+			log.Printf("Re-encrypting fragment with decrypted master key")
+
+			// Re-encrypt fragment with new decrypted master key
+			newEncryptedFragment, err := services.EncryptMasterKey(
+				decryptedFragment,
+				decryptedMasterKey, 
+				newNonce,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to re-encrypt fragment: %w", err)
+			}
+
+			// Store updated fragment
+			if err := keyFragmentModel.storage.StoreFragment(
+				fragment.NodeIndex,
+				fragment.FragmentPath,
+				newEncryptedFragment,
+			); err != nil {
+				return fmt.Errorf("failed to store fragment: %w", err)
+			}
+
+			// Update fragment metadata
+			updates := map[string]interface{}{
+				"encryption_nonce":   newNonce,
+				"master_key_version": gorm.Expr("master_key_version + ?", 1),
+			}
+
+			if err := tx.Model(&fragment.KeyFragment).Updates(updates).Error; err != nil {
+				return fmt.Errorf("failed to update fragment metadata: %w", err)
+			}
+
+			log.Printf("Successfully updated fragment %d for file %d",
+				fragment.FragmentIndex, file.ID)
+		}
+	}
+
+	return nil
 }

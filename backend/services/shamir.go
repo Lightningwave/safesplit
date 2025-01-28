@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+
 	"github.com/hashicorp/vault/shamir"
 )
 
@@ -73,9 +74,9 @@ func (s *ShamirService) SplitKey(key []byte, n, k int, fileID uint, serverKeyID 
 		}
 
 		fragmentPath := filepath.Join(
-            fmt.Sprintf("file_%d", fileID),
-            fmt.Sprintf("fragment_%d", xCoord),
-        )
+			fmt.Sprintf("file_%d", fileID),
+			fmt.Sprintf("fragment_%d", xCoord),
+		)
 
 		keyShares[i] = KeyShare{
 			Index:            int(xCoord),

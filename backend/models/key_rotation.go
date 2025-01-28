@@ -10,12 +10,10 @@ import (
 type RotationType string
 
 const (
-	RotationTypeAutomatic RotationType = "automatic"
-	RotationTypeManual    RotationType = "manual"
-	RotationTypeForced    RotationType = "forced"
-	RotationTypePassword  RotationType = "password_change"
+    RotationTypeAutomatic RotationType = "automatic"
+    RotationTypeManual    RotationType = "manual"
+    RotationTypeForced    RotationType = "forced"
 )
-
 type KeyRotationHistory struct {
 	ID            uint         `json:"id" gorm:"primaryKey"`
 	UserID        uint         `json:"user_id"`
@@ -52,7 +50,7 @@ func (m *KeyRotationModel) LogRotation(userID uint, oldVersion, newVersion int, 
 // GetRotationHistory retrieves all rotation events for a user
 func (m *KeyRotationModel) GetRotationHistory(userID uint) ([]KeyRotationHistory, error) {
 	var history []KeyRotationHistory
-	
+
 	err := m.db.Where("user_id = ?", userID).
 		Order("rotated_at DESC").
 		Find(&history).Error
@@ -66,7 +64,7 @@ func (m *KeyRotationModel) GetRotationHistory(userID uint) ([]KeyRotationHistory
 // GetLatestRotation gets the most recent key rotation event for a user
 func (m *KeyRotationModel) GetLatestRotation(userID uint) (*KeyRotationHistory, error) {
 	var rotation KeyRotationHistory
-	
+
 	err := m.db.Where("user_id = ?", userID).
 		Order("rotated_at DESC").
 		First(&rotation).Error
@@ -83,7 +81,7 @@ func (m *KeyRotationModel) GetLatestRotation(userID uint) (*KeyRotationHistory, 
 // CountRotationsByType counts rotations by type within a time period
 func (m *KeyRotationModel) CountRotationsByType(userID uint, rotationType RotationType, since time.Time) (int64, error) {
 	var count int64
-	
+
 	err := m.db.Model(&KeyRotationHistory{}).
 		Where("user_id = ? AND rotation_type = ? AND rotated_at >= ?", userID, rotationType, since).
 		Count(&count).Error
@@ -114,7 +112,7 @@ func (m *KeyRotationModel) CheckRotationNeeded(userID uint, maxAge time.Duration
 // GetRotationsBetween gets all rotations between two timestamps
 func (m *KeyRotationModel) GetRotationsBetween(userID uint, start, end time.Time) ([]KeyRotationHistory, error) {
 	var rotations []KeyRotationHistory
-	
+
 	err := m.db.Where("user_id = ? AND rotated_at BETWEEN ? AND ?", userID, start, end).
 		Order("rotated_at DESC").
 		Find(&rotations).Error
@@ -131,7 +129,7 @@ func (m *KeyRotationModel) GetUsersByRotationStatus(maxAge time.Duration) ([]uin
 	threshold := time.Now().Add(-maxAge)
 
 	// Subquery to get latest rotation per user
-	latestRotations := m.db.Table("key_rotation_histories").
+	latestRotations := m.db.Table("key_rotation_history").
 		Select("user_id, MAX(rotated_at) as last_rotation").
 		Group("user_id")
 
