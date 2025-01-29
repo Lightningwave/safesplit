@@ -164,6 +164,7 @@ CREATE TABLE file_shares (
     password_hash VARCHAR(255) NOT NULL,          -- Share password hash
     password_salt VARCHAR(32) NOT NULL,           -- Share password salt
     encrypted_key_fragment MEDIUMBLOB NOT NULL,   -- Password-encrypted fragment
+    fragment_index INT NOT NULL DEFAULT 1,
     expires_at TIMESTAMP NULL,                    -- Optional expiration
     max_downloads INT NULL,                       -- Optional download limit
     download_count INT DEFAULT 0,                 -- Current downloads

@@ -116,7 +116,7 @@ func NewRouteHandlers(
 			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
 			ArchiveFileController:    EndUser.NewArchiveFileController(fileModel),
 			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
-			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
+			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService,userModel,serverMasterKeyModel),
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),

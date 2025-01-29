@@ -18,6 +18,7 @@ type FileShare struct {
 	PasswordHash         string     `json:"-"`
 	PasswordSalt         string     `json:"-"`
 	EncryptedKeyFragment []byte     `json:"-" gorm:"type:mediumblob"`
+	FragmentIndex        int        `json:"-" gorm:"not null"`
 	ExpiresAt            *time.Time `json:"expires_at"`
 	MaxDownloads         *int       `json:"max_downloads"`
 	DownloadCount        int        `json:"download_count" gorm:"default:0"`
