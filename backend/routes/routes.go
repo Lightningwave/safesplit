@@ -18,7 +18,7 @@ type RouteHandlers struct {
 	LoginController           *controllers.LoginController
 	SuperAdminLoginController *SuperAdmin.LoginController
 	CreateAccountController   *controllers.CreateAccountController
-	TwoFactorController      *EndUser.TwoFactorController
+	TwoFactorController       *EndUser.TwoFactorController
 	SuperAdminHandlers        *SuperAdminHandlers
 	SysAdminHandlers          *SysAdminHandlers
 	EndUserHandlers           *EndUserHandlers
@@ -90,7 +90,7 @@ func NewRouteHandlers(
 		LoginController:           controllers.NewLoginController(userModel, billingModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
-		TwoFactorController: EndUser.NewTwoFactorController(userModel),
+		TwoFactorController:       EndUser.NewTwoFactorController(userModel),
 		SuperAdminHandlers: &SuperAdminHandlers{
 			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
@@ -116,11 +116,11 @@ func NewRouteHandlers(
 			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
 			ArchiveFileController:    EndUser.NewArchiveFileController(fileModel),
 			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
-			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService,userModel,serverMasterKeyModel),
+			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel,keyRotationModel,keyFragmentModel,fileModel,),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel, keyFragmentModel, fileModel),
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
@@ -128,7 +128,7 @@ func NewRouteHandlers(
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
-			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
+			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
 		},
 	}
 }
@@ -159,12 +159,12 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	protected.GET("/me", handlers.LoginController.GetMe)
 
 	// 2FA routes
-    twoFactor := protected.Group("/2fa")
-{
-    twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
-    twoFactor.POST("/disable", handlers.TwoFactorController.DisableEmailTwoFactor)
-    twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
-}
+	twoFactor := protected.Group("/2fa")
+	{
+		twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
+		twoFactor.POST("/disable", handlers.TwoFactorController.DisableEmailTwoFactor)
+		twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
+	}
 
 	// End User routes should be first as they're most commonly accessed
 	setupEndUserRoutes(protected, handlers.EndUserHandlers)

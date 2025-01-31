@@ -291,10 +291,10 @@ func (m *FileModel) GetFileEncryptionInfo(fileID uint) (*struct {
 
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 	var file File
-	err := m.db.Where("id = ? AND is_deleted = ?", fileID, false).First(&file).Error
+	err := m.db.Where("id = ? AND is_deleted = ? AND is_archived = ?", fileID, false, false).First(&file).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("file not found")
+			return nil, fmt.Errorf("file not found or inaccessible")
 		}
 		return nil, fmt.Errorf("database error: %w", err)
 	}
@@ -304,8 +304,8 @@ func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 // GetFileForDownload updated to handle Reed-Solomon shards
 func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 	var file File
-	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
-		First(&file).Error
+	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ? AND is_archived = ?",
+		fileID, userID, false, false).First(&file).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -315,7 +315,6 @@ func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 		return nil, fmt.Errorf("database error: %w", err)
 	}
 
-	// Log the request
 	log.Printf("File download requested - ID: %d, Path: %s, Owner: %d, IsSharded: %v",
 		file.ID, file.FilePath, file.UserID, file.IsSharded)
 
