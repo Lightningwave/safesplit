@@ -60,6 +60,7 @@ type AccessShareRequest struct {
 }
 
 func (c *ShareFileController) CreateShare(ctx *gin.Context) {
+	log.Printf("Received premium share creation request for file ID: %v", ctx.Param("id"))
 	var req CreateShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -194,7 +195,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	// Log premium share creation
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       currentUser.ID,
-		ActivityType: "premium_share",
+		ActivityType: "share",
 		FileID:       &file.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
@@ -213,6 +214,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 
 func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	shareLink := ctx.Param("shareLink")
+	log.Printf("Received premium share access request for link: %s", shareLink)
 	var req AccessShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -421,15 +423,10 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Update premium share status
-	if err := c.fileShareModel.IncrementDownloadCount(share.ID); err != nil {
-		log.Printf("Failed to increment download count: %v", err)
-	}
-
 	// Log premium share access
 	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       share.SharedBy,
-		ActivityType: "premium_download",
+		ActivityType: "download",
 		FileID:       &file.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
@@ -438,6 +435,19 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		log.Printf("Failed to log share download activity: %v", err)
 	}
 
+	// Update premium share status - should be before sending response
+	log.Printf("Incrementing download count for share ID %d", share.ID)
+	if err := c.fileShareModel.IncrementDownloadCount(share.ID); err != nil {
+		log.Printf("Failed to increment download count: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "Failed to update download count",
+		})
+		return
+	}
+	log.Printf("Successfully incremented download count for share ID %d", share.ID)
+
+	// Only proceed to send file if increment succeeded
 	c.sendFileResponse(ctx, file, decryptedData)
 }
 

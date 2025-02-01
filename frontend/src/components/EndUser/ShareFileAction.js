@@ -17,27 +17,39 @@ const ShareFileAction = ({ file, user }) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-
+    
         try {
             const token = localStorage.getItem('token');
             if (!token) {
                 setError('Please log in to share files.');
                 return;
             }
-
+                
+            // Format the date if it exists
+            const formattedExpiresAt = expiresAt 
+                ? new Date(expiresAt).toISOString()
+                : null;
+    
+            console.log('Debug expiry:', {
+                originalExpiresAt: expiresAt,
+                formattedExpiresAt: formattedExpiresAt
+            });
+    
             const shareData = {
                 file_id: file.id,
                 password: password,
                 ...(isPremium && {
-                    expires_at: expiresAt || null,
+                    expires_at: formattedExpiresAt,  
                     max_downloads: maxDownloads ? parseInt(maxDownloads) : null
                 })
             };
-
+    
+            console.log('Sending share data:', shareData);
+    
             const endpoint = isPremium
                 ? `http://localhost:8080/api/premium/shares/files/${file.id}`
                 : `http://localhost:8080/api/files/${file.id}/share`;
-
+    
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -46,9 +58,13 @@ const ShareFileAction = ({ file, user }) => {
                 },
                 body: JSON.stringify(shareData),
             });
-
+    
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('Share creation failed:', {
+                    status: response.status,
+                    error: errorData
+                });
                 throw new Error(errorData.error || 'Failed to create share link');
             }
 

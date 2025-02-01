@@ -56,6 +56,7 @@ type AccessShareRequest struct {
 }
 
 func (c *ShareFileController) CreateShare(ctx *gin.Context) {
+	log.Printf("Received normal share creation request for file ID: %v", ctx.Param("id"))
 	var req CreateShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -198,6 +199,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 
 func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	shareLink := ctx.Param("shareLink")
+	log.Printf("Received normal share access request for link: %s", shareLink)
 	var req AccessShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{

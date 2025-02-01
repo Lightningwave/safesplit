@@ -8,7 +8,7 @@ const SharedFileAccess = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     // Determine if it's a premium share by checking URL path
-    const isPremiumShare = window.location.pathname.includes('/premium/shares/');
+    const isPremiumShare = window.location.pathname.includes('/premium/share/');
     const shareLink = window.location.pathname.split('/').pop();
 
     const handleSubmit = async (e) => {
