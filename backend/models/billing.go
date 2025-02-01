@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// BillingModel constants
 const (
 	PaymentMethodCreditCard  = "credit_card"
 	PaymentMethodBankAccount = "bank_account"
