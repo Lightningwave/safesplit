@@ -229,12 +229,13 @@ CREATE TABLE user_subscriptions (
 );
 
 -- Feedback table
-CREATE TABLE feedback (
+CREATE TABLE feedbacks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,                         -- User submitting feedback
     type ENUM('feedback', 'suspicious_activity') NOT NULL,
     subject VARCHAR(255) NOT NULL,                -- Brief description
     message TEXT NOT NULL,                        -- Detailed content
+    details TEXT,
     status ENUM('pending', 'in_review', 'resolved') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

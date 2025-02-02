@@ -2,7 +2,7 @@ package models
 
 import (
 	"time"
-
+    "fmt"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +25,7 @@ type Feedback struct {
 	Type      FeedbackType  `json:"type" gorm:"type:enum('feedback','suspicious_activity')"`
 	Subject   string        `json:"subject" gorm:"size:255;not null"`
 	Message   string        `json:"message" gorm:"type:text;not null"`
+	Details   string        `json:"details" gorm:"type:text"`
 	Status    FeedbackStatus `json:"status" gorm:"type:enum('pending','in_review','resolved');default:pending"`
 	CreatedAt time.Time     `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time     `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP;ON UPDATE CURRENT_TIMESTAMP"`
@@ -59,6 +60,18 @@ func (m *FeedbackModel) GetByID(id uint) (*Feedback, error) {
 func (m *FeedbackModel) GetAllByUser(userID uint) ([]Feedback, error) {
 	var feedbacks []Feedback
 	if err := m.db.Where("user_id = ?", userID).Find(&feedbacks).Error; err != nil {
+		return nil, err
+	}
+	return feedbacks, nil
+}
+
+// GetAllByUserAndType retrieves all feedback entries for a specific user and type
+func (m *FeedbackModel) GetAllByUserAndType(userID uint, feedbackType FeedbackType) ([]Feedback, error) {
+	var feedbacks []Feedback
+	err := m.db.Where("user_id = ? AND type = ?", userID, feedbackType).
+		Order("created_at DESC").
+		Find(&feedbacks).Error
+	if err != nil {
 		return nil, err
 	}
 	return feedbacks, nil
@@ -142,4 +155,34 @@ func (m *FeedbackModel) GetDateRangeCount(startDate, endDate time.Time) (int64, 
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(&count).Error
 	return count, err
+}
+
+// UpdateStatusWithComment updates both the status and adds a comment to the feedback
+func (m *FeedbackModel) UpdateStatusWithComment(id uint, status FeedbackStatus, comment string) error {
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		feedback, err := m.GetByID(id)
+		if err != nil {
+			return fmt.Errorf("feedback not found: %w", err)
+		}
+
+		// Update status
+		feedback.Status = status
+
+		// Append comment to details with timestamp
+		timestamp := time.Now().Format(time.RFC3339)
+		newDetails := fmt.Sprintf("%s\n[%s] Status changed to %s: %s",
+			feedback.Details, // Keep existing details
+			timestamp,
+			status,
+			comment,
+		)
+		feedback.Details = newDetails
+
+		// Save changes
+		if err := tx.Save(feedback).Error; err != nil {
+			return fmt.Errorf("failed to update feedback: %w", err)
+		}
+
+		return nil
+	})
 }

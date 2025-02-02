@@ -43,6 +43,8 @@ type EndUserHandlers struct {
 	ViewStorageController    *EndUser.ViewStorageController
 	PaymentController        *EndUser.PaymentController
 	SubscriptionController   *EndUser.SubscriptionController
+	ReportController         *EndUser.ReportController
+	FeedbackController       *EndUser.FeedbackController
 }
 type PremiumUserHandlers struct {
 	FragmentController          *PremiumUser.FragmentController
@@ -65,6 +67,8 @@ type SysAdminHandlers struct {
 	ViewDeletedUserAccountController *SysAdmin.ViewDeletedUserAccountController
 	ViewUserStorageController        *SysAdmin.ViewUserStorageController
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
+	ViewFeedbacksController         *SysAdmin.ViewFeedbacksController   
+    ViewReportsController           *SysAdmin.ViewReportsController 
 }
 
 func NewRouteHandlers(
@@ -79,6 +83,7 @@ func NewRouteHandlers(
 	keyFragmentModel *models.KeyFragmentModel,
 	keyRotationModel *models.KeyRotationModel,
 	serverMasterKeyModel *models.ServerMasterKeyModel,
+	feedbackModel *models.FeedbackModel,
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
 	compressionService *services.CompressionService,
@@ -105,6 +110,8 @@ func NewRouteHandlers(
 			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
+			ViewFeedbacksController:         SysAdmin.NewViewFeedbacksController(feedbackModel),
+			ViewReportsController:           SysAdmin.NewViewReportsController(feedbackModel, userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
@@ -124,6 +131,8 @@ func NewRouteHandlers(
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
+			ReportController:   EndUser.NewReportController(feedbackModel, fileModel),
+			FeedbackController: EndUser.NewFeedbackController(feedbackModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
@@ -221,6 +230,19 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		payment.GET("/status", handlers.PaymentController.GetPaymentStatus)
 		payment.POST("/cancel", handlers.SubscriptionController.CancelSubscription)
 	}
+	feedback := protected.Group("/feedback")
+    {
+        feedback.POST("", handlers.FeedbackController.SubmitFeedback)
+        feedback.GET("", handlers.FeedbackController.GetUserFeedback)
+        feedback.GET("/categories", handlers.FeedbackController.GetFeedbackCategories)
+    }
+
+    reports := protected.Group("/reports")
+    {
+        reports.POST("/file/:id", handlers.ReportController.ReportFile)
+        reports.POST("/share/:shareLink", handlers.ReportController.ReportShare)
+        reports.GET("", handlers.ReportController.GetUserReports)
+    }
 
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
@@ -261,4 +283,20 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 	}
 
 	sysAdmin.GET("/storage/stats", handlers.ViewUserStorageController.GetStorageStats)
+
+	feedback := sysAdmin.Group("/feedback")
+    {
+        feedback.GET("", handlers.ViewFeedbacksController.GetAllFeedbacks)
+        feedback.GET("/:id", handlers.ViewFeedbacksController.GetFeedback)
+        feedback.PUT("/:id/status", handlers.ViewFeedbacksController.UpdateFeedbackStatus)
+        feedback.GET("/stats", handlers.ViewFeedbacksController.GetFeedbackStats)
+    }
+
+    reports := sysAdmin.Group("/reports")
+    {
+        reports.GET("", handlers.ViewReportsController.GetAllReports)
+        reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
+        reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
+        reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
+    }
 }
