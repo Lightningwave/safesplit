@@ -180,6 +180,29 @@ The application will be available at `http://localhost:3000`
 
 - GET `/api/users/me` - Get current user profile
 
+## Testing
+
+### Email testing with mailtrap
+
+```bash
+# Create new account with Mailtrap
+Get your username and password details
+# Create .env file on backend folder
+SMTP_HOST=sandbox.smtp.mailtrap.io
+SMTP_PORT=465
+SMTP_USERNAME= your username from Mailtrap
+SMTP_PASSWORD= your password from Mailtrap
+SMTP_FROM_NAME=Safesplit
+SMTP_FROM_EMAIL=noreply@safesplit.com
+```
+
+### Payment testing with Paypal braintree
+
+```bash
+Use any credit card details from:
+https://developer.paypal.com/braintree/docs/guides/credit-cards/testing-go-live/php
+```
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

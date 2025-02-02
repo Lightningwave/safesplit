@@ -354,7 +354,6 @@ func (m *FileModel) ListUserFilesInFolder(userID uint, folderID *uint) ([]File, 
 }
 
 // File operations
-// DeleteFile updates to handle Reed-Solomon shards
 func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	tx := m.db.Begin()
 
@@ -576,7 +575,6 @@ func (m *FileModel) GetRecoverableFiles(userID uint) ([]File, error) {
 }
 
 // RecoverFile recovers a deleted file and updates storage usage
-// RecoverFile updated to handle Reed-Solomon shards
 func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	tx := m.db.Begin()
 	defer func() {
