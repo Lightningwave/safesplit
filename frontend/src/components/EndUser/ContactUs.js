@@ -1,136 +1,175 @@
 import React, { useState } from 'react';
 
-const ContactUs = ({ onSubmit }) => {
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [messageType, setMessageType] = useState('Feedback');
-    const [message, setMessage] = useState('');
-    const [attachment, setAttachment] = useState(null);
+const FeedbackForm = () => {
+    const [formData, setFormData] = useState({
+        category: 'feature_request',
+        subject: '',
+        message: ''
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
-    const handleFileChange = (e) => {
-        setAttachment(e.target.files[0]);
+    const categories = [
+        {
+            id: 'feature_request',
+            name: 'Feature Request',
+            description: 'Suggest a new feature for SafeSplit'
+        },
+        {
+            id: 'bug_report',
+            name: 'Bug Report',
+            description: 'Report a problem or issue with the application'
+        },
+        {
+            id: 'general_feedback',
+            name: 'General Feedback',
+            description: 'Share your thoughts about SafeSplit'
+        },
+        {
+            id: 'improvement',
+            name: 'Improvement Suggestion',
+            description: 'Suggest improvements to existing features'
+        },
+        {
+            id: 'suggestion',
+            name: 'Other Suggestion',
+            description: 'Any other suggestions for SafeSplit'
+        }
+    ];
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        // Set submitting state
         setIsSubmitting(true);
+        setError('');
+        setSuccess('');
 
-        // Prepare form data for submission
-        const formData = new FormData();
-        formData.append('name', name);
-        formData.append('email', email);
-        formData.append('messageType', messageType);
-        formData.append('message', message);
-        if (attachment) {
-            formData.append('attachment', attachment);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('Please log in to submit feedback');
+            }
+
+            const response = await fetch('http://localhost:8080/api/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to submit feedback');
+            }
+
+            setSuccess(data.data.message);
+            setFormData({
+                category: 'feature_request',
+                subject: '',
+                message: ''
+            });
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsSubmitting(false);
         }
-
-        // If using an onSubmit callback passed in as a prop:
-        // await onSubmit(formData);
-
-        // For demonstration, just log the data
-        console.log('Contact Us Submission:', { name, email, messageType, message, attachment });
-
-        // Reset the form or show a success message
-        setName('');
-        setEmail('');
-        setMessageType('Feedback');
-        setMessage('');
-        setAttachment(null);
-        setIsSubmitting(false);
     };
 
     return (
-        <div className="max-w-xl mx-auto bg-white p-8 rounded-md shadow-md">
-            <h2 className="text-2xl font-semibold mb-6">Contact Us</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-md">
+            <h2 className="text-2xl font-semibold mb-6">Submit Feedback</h2>
+            
+            {error && (
+                <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
+                    {error}
+                </div>
+            )}
+            
+            {success && (
+                <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 text-green-700">
+                    {success}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label className="block mb-1 font-medium" htmlFor="name">
-                        Name
+                    <label className="block text-sm font-medium text-gray-700">
+                        Feedback Category
+                    </label>
+                    <select
+                        name="category"
+                        value={formData.category}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        {categories.map(category => (
+                            <option key={category.id} value={category.id}>
+                                {category.name}
+                            </option>
+                        ))}
+                    </select>
+                    <p className="mt-1 text-sm text-gray-500">
+                        {categories.find(c => c.id === formData.category)?.description}
+                    </p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                        Subject
                     </label>
                     <input
                         type="text"
-                        id="name"
-                        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                        placeholder="Your Name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        name="subject"
+                        value={formData.subject}
+                        onChange={handleInputChange}
                         required
+                        minLength={5}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Brief subject of your feedback"
                     />
                 </div>
 
                 <div>
-                    <label className="block mb-1 font-medium" htmlFor="email">
-                        Email
-                    </label>
-                    <input
-                        type="email"
-                        id="email"
-                        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                        placeholder="Your Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                </div>
-
-                <div>
-                    <label className="block mb-1 font-medium" htmlFor="messageType">
-                        Message Type
-                    </label>
-                    <select
-                        id="messageType"
-                        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                        value={messageType}
-                        onChange={(e) => setMessageType(e.target.value)}
-                    >
-                        <option value="Feedback">Feedback</option>
-                        <option value="Report">Report</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block mb-1 font-medium" htmlFor="message">
+                    <label className="block text-sm font-medium text-gray-700">
                         Message
                     </label>
                     <textarea
-                        id="message"
-                        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                        placeholder="Describe your feedback or issue..."
-                        rows="5"
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        name="message"
+                        value={formData.message}
+                        onChange={handleInputChange}
                         required
-                    ></textarea>
-                </div>
-
-                <div>
-                    <label className="block mb-1 font-medium" htmlFor="attachment">
-                        Attachment (optional)
-                    </label>
-                    <input
-                        type="file"
-                        id="attachment"
-                        className="w-full"
-                        onChange={handleFileChange}
+                        minLength={10}
+                        rows={5}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Provide details about your feedback..."
                     />
                 </div>
 
                 <button
                     type="submit"
                     disabled={isSubmitting}
-                    className={`px-4 py-2 rounded text-white ${
-                        isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                    className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                        isSubmitting 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                     }`}
                 >
-                    {isSubmitting ? 'Sending...' : 'Submit'}
+                    {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
                 </button>
             </form>
         </div>
     );
 };
 
-export default ContactUs;
+export default FeedbackForm;

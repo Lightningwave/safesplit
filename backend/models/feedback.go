@@ -79,34 +79,34 @@ func (m *FeedbackModel) GetAllByUserAndType(userID uint, feedbackType FeedbackTy
 
 // GetAll retrieves all feedback entries with optional filters
 func (m *FeedbackModel) GetAll(filters map[string]interface{}, page, pageSize int) ([]Feedback, int64, error) {
-	var feedbacks []Feedback
-	var total int64
+    var feedbacks []Feedback
+    var total int64
 
-	query := m.db.Model(&Feedback{}).Preload("User")
+    query := m.db.Model(&Feedback{}).Preload("User")
 
-	// Apply filters
-	if feedbackType, ok := filters["type"].(string); ok {
-		query = query.Where("type = ?", feedbackType)
-	}
-	if status, ok := filters["status"].(string); ok {
-		query = query.Where("status = ?", status)
-	}
-	if userID, ok := filters["user_id"].(uint); ok {
-		query = query.Where("user_id = ?", userID)
-	}
+    // Apply filters
+    if feedbackType, ok := filters["type"].(FeedbackType); ok {
+        query = query.Where("type = ?", feedbackType)
+    }
+    if status, ok := filters["status"].(string); ok {
+        query = query.Where("status = ?", status)
+    }
+    if userID, ok := filters["user_id"].(uint); ok {
+        query = query.Where("user_id = ?", userID)
+    }
 
-	// Get total count
-	query.Count(&total)
+    // Get total count
+    query.Count(&total)
 
-	// Apply pagination
-	offset := (page - 1) * pageSize
-	err := query.
-		Order("created_at DESC").
-		Offset(offset).
-		Limit(pageSize).
-		Find(&feedbacks).Error
+    // Apply pagination
+    offset := (page - 1) * pageSize
+    err := query.
+        Order("created_at DESC").
+        Offset(offset).
+        Limit(pageSize).
+        Find(&feedbacks).Error
 
-	return feedbacks, total, err
+    return feedbacks, total, err
 }
 
 // UpdateStatus updates the status of a feedback entry

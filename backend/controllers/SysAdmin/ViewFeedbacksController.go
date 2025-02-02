@@ -46,7 +46,7 @@ func (c *ViewFeedbacksController) GetAllFeedbacks(ctx *gin.Context) {
 		filters["status"] = req.Status
 	}
 
-	log.Printf("Fetching feedbacks with filters: %v, page: %d, size: %d", 
+	log.Printf("Fetching feedbacks with filters: %v, page: %d, size: %d",
 		filters, req.Page, req.PageSize)
 
 	feedbacks, total, err := c.feedbackModel.GetAll(filters, req.Page, req.PageSize)
@@ -64,9 +64,9 @@ func (c *ViewFeedbacksController) GetAllFeedbacks(ctx *gin.Context) {
 		"data": gin.H{
 			"feedbacks": feedbacks,
 			"meta": gin.H{
-				"total":      total,
-				"page":       req.Page,
-				"page_size":  req.PageSize,
+				"total":       total,
+				"page":        req.Page,
+				"page_size":   req.PageSize,
 				"total_pages": (total + int64(req.PageSize) - 1) / int64(req.PageSize),
 			},
 		},

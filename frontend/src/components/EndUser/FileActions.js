@@ -4,6 +4,7 @@ import DownloadFileAction from './DownloadFileAction';
 import DeleteFileAction from './DeleteFileAction';
 import ShareFileAction from './ShareFileAction';
 import ArchiveFileAction from './ArchiveFileAction';
+import ReportFileAction from './ReportFileAction';  
 
 const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, selected = false, onSelect, selectedFiles = [] }) => {
     const [showActions, setShowActions] = useState(false);
@@ -50,6 +51,7 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                         onRefresh={onRefresh} 
                     />
+                    <ReportFileAction file={file} />  {/* Add this line */}
                 </div>
             )}
         </div>
