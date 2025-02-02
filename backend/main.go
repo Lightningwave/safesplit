@@ -81,6 +81,7 @@ func main() {
 	fileShareModel := models.NewFileShareModel(db)
 	keyFragmentModel := models.NewKeyFragmentModel(db, storageService)
 	keyRotationModel := models.NewKeyRotationModel(db)
+	feedbackModel := models.NewFeedbackModel(db)
 
 	// Initialize core services
 	shamirService := services.NewShamirService(nodeCount)
@@ -120,6 +121,7 @@ func main() {
 		keyFragmentModel,
 		keyRotationModel,
 		serverMasterKeyModel,
+		feedbackModel,
 		encryptionService,
 		shamirService,
 		compressionService,
