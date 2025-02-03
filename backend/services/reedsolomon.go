@@ -9,7 +9,14 @@ import (
 )
 
 type ReedSolomonService struct {
-    storage *DistributedStorageService
+    storage StorageInterface // Changed to interface type
+}
+
+type StorageInterface interface {
+    StoreShards(fileID uint, shards [][]byte) error
+    RetrieveShards(fileID uint, totalShards int) ([][]byte, error)
+    DeleteShards(fileID uint) error
+    NodeCount() int
 }
 
 type FileShards struct {
@@ -17,8 +24,8 @@ type FileShards struct {
     OriginalSize uint64
 }
 
-// Updated constructor to accept an existing storage service
-func NewReedSolomonService(storage *DistributedStorageService) (*ReedSolomonService, error) {
+// Updated constructor to accept the interface
+func NewReedSolomonService(storage StorageInterface) (*ReedSolomonService, error) {
     if storage == nil {
         return nil, fmt.Errorf("storage service cannot be nil")
     }

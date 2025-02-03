@@ -11,15 +11,14 @@ import (
 	"safesplit/services"
 	"strconv"
 	"time"
-	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 const (
-	baseStoragePath = "storage"
-	nodeCount       = 3
+	nodeCount = 3
 )
 
 func init() {
@@ -27,12 +26,14 @@ func init() {
 		log.Fatal("Error loading .env file")
 	}
 }
+
 func main() {
 	// Initialize database connection
 	db, err := config.SetupDatabase()
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+
 	// Initialize SMTP config from environment
 	smtpConfig := services.SMTPConfig{
 		Host: os.Getenv("SMTP_HOST"),
@@ -48,6 +49,7 @@ func main() {
 		FromName:  os.Getenv("SMTP_FROM_NAME"),
 		FromEmail: os.Getenv("SMTP_FROM_EMAIL"),
 	}
+
 	// Initialize email services
 	emailService, err := services.NewSMTPEmailService(smtpConfig)
 	if err != nil {
@@ -59,12 +61,39 @@ func main() {
 	subscriptionHandler := jobs.NewSubscriptionHandler(db)
 	jobs.StartSubscriptionScheduler(subscriptionHandler)
 
-	// Initialize distributed storage service
-	storageService, err := services.NewDistributedStorageService(baseStoragePath, nodeCount)
-	if err != nil {
-		log.Fatal("Failed to initialize distributed storage:", err)
+	// Initialize S3 storage service
+	s3Configs := []struct {
+		Region     string
+		BucketName string
+	}{
+		{
+			Region:     os.Getenv("S3_REGION_1"),
+			BucketName: os.Getenv("S3_BUCKET_1"),
+		},
+		{
+			Region:     os.Getenv("S3_REGION_2"),
+			BucketName: os.Getenv("S3_BUCKET_2"),
+		},
+		{
+			Region:     os.Getenv("S3_REGION_3"),
+			BucketName: os.Getenv("S3_BUCKET_3"),
+		},
 	}
-	// Initialize subscription handler
+
+	// Validate S3 configuration
+	for i, cfg := range s3Configs {
+		if cfg.Region == "" {
+			log.Fatalf("S3_REGION_%d is required", i+1)
+		}
+		if cfg.BucketName == "" {
+			log.Fatalf("S3_BUCKET_%d is required", i+1)
+		}
+	}
+
+	storageService, err := services.NewMultiS3StorageService(s3Configs)
+	if err != nil {
+		log.Fatal("Failed to initialize S3 storage:", err)
+	}
 
 	// Initialize server master key
 	serverMasterKeyModel := models.NewServerMasterKeyModel(db)
@@ -94,7 +123,7 @@ func main() {
 	}
 	defer compressionService.Close()
 
-	// Initialize Reed-Solomon service with the same storage service
+	// Initialize Reed-Solomon service with S3 storage
 	rsService, err := services.NewReedSolomonService(storageService)
 	if err != nil {
 		log.Fatal("Failed to initialize Reed-Solomon service:", err)
@@ -108,9 +137,10 @@ func main() {
 		encryptionService,
 		keyFragmentModel,
 	)
+
 	// Start cleanup scheduler for deleted files
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour) 
+		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
 		log.Println("Starting file cleanup scheduler...")
@@ -126,6 +156,7 @@ func main() {
 			}
 		}
 	}()
+
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
 		db,
@@ -152,7 +183,7 @@ func main() {
 
 	// Configure CORS settings for secure cross-origin requests
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	corsConfig.AllowOrigins = []string{"http://localhost:3000", "http://35.202.178.170"}
 	corsConfig.AllowCredentials = true
 	corsConfig.AllowHeaders = []string{
 		"Origin",

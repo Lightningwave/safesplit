@@ -36,12 +36,20 @@ type FragmentData struct {
 	Data []byte
 }
 
-type KeyFragmentModel struct {
-	db      *gorm.DB
-	storage *services.DistributedStorageService
+// StorageInterface defines the methods required for storage
+type StorageInterface interface {
+	StoreFragment(nodeIndex int, fragmentPath string, data []byte) error
+	RetrieveFragment(nodeIndex int, fragmentPath string) ([]byte, error)
+	DeleteFragment(nodeIndex int, fragmentPath string) error
+	NodeCount() int
 }
 
-func NewKeyFragmentModel(db *gorm.DB, storage *services.DistributedStorageService) *KeyFragmentModel {
+type KeyFragmentModel struct {
+	db      *gorm.DB
+	storage StorageInterface
+}
+
+func NewKeyFragmentModel(db *gorm.DB, storage StorageInterface) *KeyFragmentModel {
 	return &KeyFragmentModel{
 		db:      db,
 		storage: storage,
