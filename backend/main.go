@@ -10,7 +10,7 @@ import (
 	"safesplit/routes"
 	"safesplit/services"
 	"strconv"
-
+	"time"
 	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
@@ -108,6 +108,24 @@ func main() {
 		encryptionService,
 		keyFragmentModel,
 	)
+	// Start cleanup scheduler for deleted files
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour) 
+		defer ticker.Stop()
+
+		log.Println("Starting file cleanup scheduler...")
+		for {
+			select {
+			case <-ticker.C:
+				log.Println("Starting scheduled cleanup of old deleted files...")
+				if err := fileModel.CleanupOldDeletedFiles(30); err != nil {
+					log.Printf("Error during scheduled file cleanup: %v", err)
+				} else {
+					log.Println("Completed scheduled cleanup of old deleted files")
+				}
+			}
+		}
+	}()
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
 		db,

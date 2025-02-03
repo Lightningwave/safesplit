@@ -67,7 +67,7 @@ BEGIN
         53687091200,
         10485760,
         'premium',
-        true
+        false
     ),
     (
         'sys_admin',

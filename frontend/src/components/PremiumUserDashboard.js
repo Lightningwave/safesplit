@@ -8,11 +8,14 @@ import ContactUs from './EndUser/ContactUs';
 import CreateFolder from './EndUser/CreateFolder';
 import DeleteFolder from './EndUser/DeleteFolder';
 import TrashBin from './PremiumUser/TrashBin';  
+import MassUploadFile from './EndUser/MassUploadFile';
+import UploadButton from './EndUser/UploadButton';
 
 const PremiumUserDashboard = ({ user, onLogout }) => {
     const [isFilesOpen, setIsFilesOpen] = useState(true);
     const [selectedSection, setSelectedSection] = useState('Dashboard');
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [isMassUploadModalOpen, setIsMassUploadModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [folders, setFolders] = useState([]);
     const [currentFolder, setCurrentFolder] = useState(null);
@@ -351,14 +354,10 @@ const PremiumUserDashboard = ({ user, onLogout }) => {
                                     />
                                 </div>
                                 
-                                <button 
-                                    onClick={() => setIsUploadModalOpen(true)}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                                    aria-label="Upload file"
-                                >
-                                    <Upload size={20} />
-                                    <span>Upload File</span>
-                                </button>
+                                <UploadButton 
+                                    onSingleUpload={() => setIsUploadModalOpen(true)}
+                                    onMassUpload={() => setIsMassUploadModalOpen(true)}
+                                />
                             </div>
                         )}
                     </div>
@@ -367,18 +366,26 @@ const PremiumUserDashboard = ({ user, onLogout }) => {
                     {selectedSection === 'Contact Us' && <ContactUs onSubmit={(formData) => console.log("Form Submitted:", formData)} />}
                     {selectedSection === 'Dashboard' && renderDashboard()}
                     {['Uploaded Files', 'Shared Files', 'Archives'].includes(selectedSection) && (
-                    <ViewFile 
-                        searchQuery={searchQuery}
-                        user={user}
-                        selectedSection={selectedSection}
-                        currentFolder={currentFolder}
-                    />
-                )}
-                {selectedSection === 'Trash Bin' && (
-                    <TrashBin user={user} />
-                )}
+                        <ViewFile 
+                            searchQuery={searchQuery}
+                            user={user}
+                            selectedSection={selectedSection}
+                            currentFolder={currentFolder}
+                        />
+                    )}
+                    {selectedSection === 'Trash Bin' && (
+                        <TrashBin user={user} />
+                    )}
                 </div>
             </div>
+
+            <MassUploadFile
+                isOpen={isMassUploadModalOpen}
+                onClose={() => setIsMassUploadModalOpen(false)}
+                onUpload={handleUploadComplete}
+                user={user}
+                currentFolder={currentFolder}
+            />
 
             <UploadFile
                 isOpen={isUploadModalOpen}
@@ -401,7 +408,7 @@ const PremiumUserDashboard = ({ user, onLogout }) => {
                 }}
             />
 
-<DeleteFolder
+            <DeleteFolder
                 isOpen={isDeleteFolderOpen}
                 onClose={() => {
                     setIsDeleteFolderOpen(false);

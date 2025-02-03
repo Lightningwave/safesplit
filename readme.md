@@ -201,6 +201,11 @@ SMTP_FROM_EMAIL=noreply@safesplit.com
 ```bash
 Use any credit card details from:
 https://developer.paypal.com/braintree/docs/guides/credit-cards/testing-go-live/php
+# Example
+4111111111111111
+12/25
+123
+
 ```
 
 ## Contributing

@@ -381,24 +381,13 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		return fmt.Errorf("failed to delete file: %w", result.Error)
 	}
 
-	// Handle physical file deletion based on storage type
-	if file.IsSharded {
-		log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
-		// Delete shards
-		if err := m.rsService.DeleteShards(fileID); err != nil {
-			tx.Rollback()
-			log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
-			return fmt.Errorf("failed to delete shards: %w", err)
-		}
-		log.Printf("Successfully deleted shards for file %d", fileID)
-	} else {
-		// Delete regular file if it exists
-		if file.FilePath != "" {
-			if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
-				log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
-				// Don't rollback here as the file might have been already moved/deleted
-				log.Printf("Continuing deletion process despite file removal error")
-			}
+	// Keep shards for potential recovery
+	// We'll only delete physical files for non-sharded files
+	if !file.IsSharded && file.FilePath != "" {
+		if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
+			// Don't rollback here as the file might have been already moved/deleted
+			log.Printf("Continuing deletion process despite file removal error")
 		}
 	}
 
@@ -416,7 +405,7 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		FileID:       &fileID,
 		IPAddress:    ipAddress,
 		Status:       "success",
-		Details:      fmt.Sprintf("File deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
+		Details:      fmt.Sprintf("File marked as deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
 	}
 
 	if err := tx.Create(activity).Error; err != nil {
@@ -425,7 +414,6 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		return fmt.Errorf("failed to log activity: %w", err)
 	}
 
-	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
 		log.Printf("Failed to commit deletion transaction - File ID: %d, Error: %v", fileID, err)
 		return fmt.Errorf("failed to complete delete operation: %w", err)
@@ -434,7 +422,6 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	log.Printf("Successfully completed file deletion - ID: %d", fileID)
 	return nil
 }
-
 func (m *FileModel) ArchiveFile(fileID, userID uint, ipAddress string) error {
 	tx := m.db.Begin()
 
@@ -678,7 +665,7 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	// Log recovery activity
 	activity := &ActivityLog{
 		UserID:       userID,
-		ActivityType: "recover",
+		ActivityType: "restore",
 		FileID:       &file.ID,
 		Status:       "success",
 		Details:      fmt.Sprintf("File recovered (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
@@ -728,4 +715,117 @@ func (f *File) ValidateIVSize() error {
 			f.EncryptionType, len(f.EncryptionIV), expectedSize)
 	}
 	return nil
+}
+func (m *FileModel) PermanentlyDeleteFile(fileID, userID uint, ipAddress string) error {
+    tx := m.db.Begin()
+
+    log.Printf("Starting permanent file deletion process - File ID: %d, User ID: %d", fileID, userID)
+
+    // Get file info first
+    var file File
+    if err := tx.Where("id = ? AND user_id = ?", fileID, userID).First(&file).Error; err != nil {
+        tx.Rollback()
+        log.Printf("File not found - ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("file not found: %w", err)
+    }
+
+    log.Printf("Found file to permanently delete - ID: %d, IsSharded: %v, Size: %d bytes",
+        file.ID, file.IsSharded, file.Size)
+
+    // Handle physical data deletion
+    if file.IsSharded {
+        log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
+        // Delete shards
+        if err := m.rsService.DeleteShards(fileID); err != nil {
+            tx.Rollback()
+            log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
+            return fmt.Errorf("failed to delete shards: %w", err)
+        }
+        log.Printf("Successfully deleted shards for file %d", fileID)
+    } else if file.FilePath != "" {
+        // Delete regular file if it exists
+        if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
+            log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
+            // Don't rollback here as we want to continue with database cleanup
+        }
+    }
+
+    // Delete related key fragments
+    if err := tx.Where("file_id = ?", fileID).Delete(&KeyFragment{}).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete key fragments - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete key fragments: %w", err)
+    }
+
+    // Delete related activity logs
+    if err := tx.Where("file_id = ?", fileID).Delete(&ActivityLog{}).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete activity logs - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete activity logs: %w", err)
+    }
+
+    // Finally, delete the file record
+    if err := tx.Delete(&file).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete file record - ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete file record: %w", err)
+    }
+
+    // Log the permanent deletion activity (in a separate table for audit history)
+    permanentDeletionLog := &PermanentDeletionLog{
+        UserID:       userID,
+        FileName:     file.Name,
+        OriginalID:   fileID,
+        Size:        file.Size,
+        IsSharded:   file.IsSharded,
+        IPAddress:   ipAddress,
+        DeletedAt:   time.Now(),
+        Details:     fmt.Sprintf("File permanently deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
+    }
+
+    if err := tx.Create(permanentDeletionLog).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to create permanent deletion log - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to log permanent deletion: %w", err)
+    }
+
+    if err := tx.Commit().Error; err != nil {
+        log.Printf("Failed to commit permanent deletion transaction - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to complete permanent deletion: %w", err)
+    }
+
+    log.Printf("Successfully completed permanent file deletion - ID: %d", fileID)
+    return nil
+}
+
+// PermanentDeletionLog represents an audit log for permanent deletions
+type PermanentDeletionLog struct {
+    ID          uint      `gorm:"primaryKey"`
+    UserID      uint      `gorm:"not null"`
+    FileName    string    `gorm:"not null"`
+    OriginalID  uint      `gorm:"not null"`
+    Size        int64     `gorm:"not null"`
+    IsSharded   bool      `gorm:"not null"`
+    IPAddress   string    `gorm:"not null"`
+    DeletedAt   time.Time `gorm:"not null"`
+    Details     string    `gorm:"type:text"`
+}
+func (m *FileModel) CleanupOldDeletedFiles(retentionDays int) error {
+    cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
+    
+    var filesToDelete []File
+    if err := m.db.Where("is_deleted = ? AND deleted_at < ?", true, cutoffDate).Find(&filesToDelete).Error; err != nil {
+        return fmt.Errorf("failed to fetch old deleted files: %w", err)
+    }
+
+    for _, file := range filesToDelete {
+        log.Printf("Cleaning up old deleted file - ID: %d, DeletedAt: %v", file.ID, file.DeletedAt)
+        if err := m.PermanentlyDeleteFile(file.ID, file.UserID, "system"); err != nil {
+            log.Printf("Failed to cleanup file %d: %v", file.ID, err)
+            // Continue with other files even if one fails
+            continue
+        }
+    }
+
+    return nil
 }
