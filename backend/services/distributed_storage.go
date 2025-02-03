@@ -1,123 +1,131 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"log"
-	"os"
-	"path/filepath"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type StoredShare struct {
-	Index            int     `json:"index"`
-	Value            string  `json:"value"`
-	HolderType       string  `json:"holder_type"`
-	EncryptionNonce  []byte  `json:"encryption_nonce"`
-	MasterKeyVersion *int    `json:"master_key_version,omitempty"`
-	ServerKeyID      *string `json:"server_key_id,omitempty"`
+type S3Node struct {
+	client     *s3.Client
+	bucketName string
+	region     string
 }
 
-type DistributedStorageService struct {
-	basePath  string
-	nodePaths []string
+type MultiS3StorageService struct {
+	nodes []S3Node
 }
 
-func NewDistributedStorageService(basePath string, nodeCount int) (*DistributedStorageService, error) {
-	log.Printf("Initializing distributed storage at %s with %d nodes", basePath, nodeCount)
+func NewMultiS3StorageService(configs []struct {
+	Region     string
+	BucketName string
+}) (*MultiS3StorageService, error) {
+	nodes := make([]S3Node, len(configs))
 
-	// Create base storage directory
-	if err := os.MkdirAll(basePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create base directory: %w", err)
-	}
+	for i, cfg := range configs {
+		// Load region-specific configuration
+		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				URL:           fmt.Sprintf("https://s3.%s.amazonaws.com", cfg.Region),
+				SigningRegion: cfg.Region,
+			}, nil
+		})
 
-	// Create nodes directory
-	nodesDir := filepath.Join(basePath, "nodes")
-	if err := os.MkdirAll(nodesDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create nodes directory: %w", err)
-	}
-
-	nodePaths := make([]string, nodeCount)
-	for i := 0; i < nodeCount; i++ {
-		// Create node directory
-		nodePath := filepath.Join(nodesDir, fmt.Sprintf("node_%d", i))
-		if err := os.MkdirAll(nodePath, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create node directory %s: %w", nodePath, err)
+		awsCfg, err := config.LoadDefaultConfig(context.Background(),
+			config.WithRegion(cfg.Region),
+			config.WithEndpointResolverWithOptions(customResolver),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load AWS config for region %s: %w", cfg.Region, err)
 		}
 
-		// Create fragments and shards directories for each node
-		if err := os.MkdirAll(filepath.Join(nodePath, "fragments"), 0755); err != nil {
-			return nil, fmt.Errorf("failed to create fragments directory: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Join(nodePath, "shards"), 0755); err != nil {
-			return nil, fmt.Errorf("failed to create shards directory: %w", err)
+		// Create S3 client for this region
+		client := s3.NewFromConfig(awsCfg)
+
+		nodes[i] = S3Node{
+			client:     client,
+			bucketName: cfg.BucketName,
+			region:     cfg.Region,
 		}
 
-		nodePaths[i] = nodePath
-		log.Printf("Created node directory: %s", nodePath)
+		log.Printf("Initialized S3 node in region %s with bucket %s", cfg.Region, cfg.BucketName)
 	}
 
-	return &DistributedStorageService{
-		basePath:  basePath,
-		nodePaths: nodePaths,
+	return &MultiS3StorageService{
+		nodes: nodes,
 	}, nil
 }
 
-// NodeCount returns the number of available storage nodes
-func (s *DistributedStorageService) NodeCount() int {
-	return len(s.nodePaths)
+// Rest of the methods remain the same...
+
+func (s *MultiS3StorageService) NodeCount() int {
+	return len(s.nodes)
 }
 
-// StoreShards distributes and stores file shards across nodes
-func (s *DistributedStorageService) StoreShards(fileID uint, shards [][]byte) error {
-	log.Printf("Storing %d shards for file %d", len(shards), fileID)
-
-	fileDir := fmt.Sprintf("file_%d", fileID)
+func (s *MultiS3StorageService) StoreShards(fileID uint, shards [][]byte) error {
+	ctx := context.Background()
 
 	for i, shard := range shards {
-		nodeIndex := i % len(s.nodePaths)
-		shardPath := filepath.Join(s.nodePaths[nodeIndex], "shards", fileDir)
+		nodeIndex := i % len(s.nodes)
+		node := s.nodes[nodeIndex]
 
-		if err := os.MkdirAll(shardPath, 0755); err != nil {
-			return fmt.Errorf("failed to create directory in node %d: %w", nodeIndex, err)
+		key := fmt.Sprintf("shards/file_%d/shard_%d", fileID, i)
+
+		_, err := node.client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(node.bucketName),
+			Key:    aws.String(key),
+			Body:   bytes.NewReader(shard),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to store shard %d in region %s: %w",
+				i, node.region, err)
 		}
 
-		// Store shard
-		fullPath := filepath.Join(shardPath, fmt.Sprintf("shard_%d", i))
-		if err := os.WriteFile(fullPath, shard, 0600); err != nil {
-			return fmt.Errorf("failed to write shard %d to node %d: %w", i, nodeIndex, err)
-		}
-
-		log.Printf("Stored shard %d in node %d: %s", i, nodeIndex, fullPath)
+		log.Printf("Stored shard %d in region %s: s3://%s/%s",
+			i, node.region, node.bucketName, key)
 	}
 
 	return nil
 }
 
-// RetrieveShards collects shards for a file from nodes
-func (s *DistributedStorageService) RetrieveShards(fileID uint, totalShards int) ([][]byte, error) {
-	log.Printf("Retrieving %d shards for file %d", totalShards, fileID)
-
+func (s *MultiS3StorageService) RetrieveShards(fileID uint, totalShards int) ([][]byte, error) {
+	ctx := context.Background()
 	shards := make([][]byte, totalShards)
 	retrievedCount := 0
 	dataShards := totalShards - 2
-	fileDir := fmt.Sprintf("file_%d", fileID)
 
 	for shardIndex := 0; shardIndex < totalShards; shardIndex++ {
-		nodeIndex := shardIndex % len(s.nodePaths)
-		fullPath := filepath.Join(s.nodePaths[nodeIndex], "shards", fileDir,
-			fmt.Sprintf("shard_%d", shardIndex))
+		nodeIndex := shardIndex % len(s.nodes)
+		node := s.nodes[nodeIndex]
 
-		data, err := os.ReadFile(fullPath)
+		key := fmt.Sprintf("shards/file_%d/shard_%d", fileID, shardIndex)
+
+		result, err := node.client.GetObject(ctx, &s3.GetObjectInput{
+			Bucket: aws.String(node.bucketName),
+			Key:    aws.String(key),
+		})
 		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("error reading shard %d: %w", shardIndex, err)
-			}
-			log.Printf("Shard %d missing from node %d", shardIndex, nodeIndex)
+			log.Printf("Shard %d missing from region %s: %v", shardIndex, node.region, err)
 			continue
+		}
+
+		data, err := io.ReadAll(result.Body)
+		result.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error reading shard %d data from region %s: %w",
+				shardIndex, node.region, err)
 		}
 
 		shards[shardIndex] = data
 		retrievedCount++
-		log.Printf("Retrieved shard %d from node %d: %s", shardIndex, nodeIndex, fullPath)
+		log.Printf("Retrieved shard %d from region %s: s3://%s/%s",
+			shardIndex, node.region, node.bucketName, key)
 	}
 
 	if retrievedCount < dataShards {
@@ -128,81 +136,111 @@ func (s *DistributedStorageService) RetrieveShards(fileID uint, totalShards int)
 	return shards, nil
 }
 
-// StoreFragment stores a single key fragment in a node
-func (s *DistributedStorageService) StoreFragment(nodeIndex int, fragmentPath string, data []byte) error {
-	if nodeIndex >= len(s.nodePaths) {
+func (s *MultiS3StorageService) StoreFragment(nodeIndex int, fragmentPath string, data []byte) error {
+	if nodeIndex >= len(s.nodes) {
 		return fmt.Errorf("invalid node index: %d", nodeIndex)
 	}
 
-	fullPath := filepath.Join(s.nodePaths[nodeIndex], "fragments", fragmentPath)
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-		return fmt.Errorf("failed to create fragment directory: %w", err)
+	node := s.nodes[nodeIndex]
+	key := fmt.Sprintf("fragments/%s", fragmentPath)
+
+	_, err := node.client.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket: aws.String(node.bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader(data),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to store fragment in region %s: %w", node.region, err)
 	}
 
-	if err := os.WriteFile(fullPath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write fragment: %w", err)
-	}
-
-	log.Printf("Stored fragment in node %d: %s", nodeIndex, fullPath)
+	log.Printf("Stored fragment in region %s: s3://%s/%s",
+		node.region, node.bucketName, key)
 	return nil
 }
 
-// RetrieveFragment retrieves a single key fragment from a node
-func (s *DistributedStorageService) RetrieveFragment(nodeIndex int, fragmentPath string) ([]byte, error) {
-	if nodeIndex >= len(s.nodePaths) {
+func (s *MultiS3StorageService) RetrieveFragment(nodeIndex int, fragmentPath string) ([]byte, error) {
+	if nodeIndex >= len(s.nodes) {
 		return nil, fmt.Errorf("invalid node index: %d", nodeIndex)
 	}
 
-	fullPath := filepath.Join(s.nodePaths[nodeIndex], "fragments", fragmentPath)
-	data, err := os.ReadFile(fullPath)
+	node := s.nodes[nodeIndex]
+	key := fmt.Sprintf("fragments/%s", fragmentPath)
+
+	result, err := node.client.GetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String(node.bucketName),
+		Key:    aws.String(key),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read fragment: %w", err)
+		return nil, fmt.Errorf("failed to retrieve fragment from region %s: %w",
+			node.region, err)
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading fragment data from region %s: %w",
+			node.region, err)
 	}
 
-	log.Printf("Retrieved fragment from node %d: %s", nodeIndex, fullPath)
+	log.Printf("Retrieved fragment from region %s: s3://%s/%s",
+		node.region, node.bucketName, key)
 	return data, nil
 }
 
-// DeleteFragment removes a single key fragment from a node
-func (s *DistributedStorageService) DeleteFragment(nodeIndex int, fragmentPath string) error {
-	if nodeIndex >= len(s.nodePaths) {
+func (s *MultiS3StorageService) DeleteFragment(nodeIndex int, fragmentPath string) error {
+	if nodeIndex >= len(s.nodes) {
 		return fmt.Errorf("invalid node index: %d", nodeIndex)
 	}
 
-	fullPath := filepath.Join(s.nodePaths[nodeIndex], "fragments", fragmentPath)
-	if err := os.Remove(fullPath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("failed to delete fragment: %w", err)
-		}
+	node := s.nodes[nodeIndex]
+	key := fmt.Sprintf("fragments/%s", fragmentPath)
+
+	_, err := node.client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+		Bucket: aws.String(node.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete fragment from region %s: %w", node.region, err)
 	}
 
-	log.Printf("Deleted fragment from node %d: %s", nodeIndex, fullPath)
+	log.Printf("Deleted fragment from region %s: s3://%s/%s",
+		node.region, node.bucketName, key)
 	return nil
 }
 
-// DeleteShards removes all shards and fragments for a file
-func (s *DistributedStorageService) DeleteShards(fileID uint) error {
-	log.Printf("Deleting shards and fragments for file %d", fileID)
-	fileDir := fmt.Sprintf("file_%d", fileID)
+func (s *MultiS3StorageService) DeleteShards(fileID uint) error {
+	ctx := context.Background()
 
-	for nodeIndex, nodePath := range s.nodePaths {
-		// Delete shards
-		shardDir := filepath.Join(nodePath, "shards", fileDir)
-		if err := os.RemoveAll(shardDir); err != nil {
-			if !os.IsNotExist(err) {
-				log.Printf("Warning: failed to delete shards from node %d: %v", nodeIndex, err)
+	for i, node := range s.nodes {
+		prefix := fmt.Sprintf("shards/file_%d/", fileID)
+
+		input := &s3.ListObjectsV2Input{
+			Bucket: aws.String(node.bucketName),
+			Prefix: aws.String(prefix),
+		}
+
+		paginator := s3.NewListObjectsV2Paginator(node.client, input)
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				log.Printf("Warning: failed to list objects in node %d (region %s): %v",
+					i, node.region, err)
+				continue
+			}
+
+			for _, obj := range page.Contents {
+				_, err := node.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket: aws.String(node.bucketName),
+					Key:    obj.Key,
+				})
+				if err != nil {
+					log.Printf("Warning: failed to delete object %s from node %d (region %s): %v",
+						*obj.Key, i, node.region, err)
+				}
 			}
 		}
 
-		// Delete fragments
-		fragmentDir := filepath.Join(nodePath, "fragments", fileDir)
-		if err := os.RemoveAll(fragmentDir); err != nil {
-			if !os.IsNotExist(err) {
-				log.Printf("Warning: failed to delete fragments from node %d: %v", nodeIndex, err)
-			}
-		}
-
-		log.Printf("Deleted data from node %d", nodeIndex)
+		log.Printf("Deleted shards from node %d (region %s)", i, node.region)
 	}
 
 	return nil

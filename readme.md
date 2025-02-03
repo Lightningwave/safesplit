@@ -208,6 +208,28 @@ https://developer.paypal.com/braintree/docs/guides/credit-cards/testing-go-live/
 
 ```
 
+### Amazon s3 servers for storage
+
+```bash
+# Update .env with your aws details
+
+# AWS Credentials (shared across regions)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+
+# S3 Region 1
+S3_REGION_1=us-east-1
+S3_BUCKET_1=safesplit1
+
+# S3 Region 2
+S3_REGION_2=us-east-1
+S3_BUCKET_2=safesplit2
+
+# S3 Region 3
+S3_REGION_3=us-east-1
+S3_BUCKET_3=safesplit3
+```
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
