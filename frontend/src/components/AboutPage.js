@@ -8,42 +8,42 @@ function AboutPage() {
       name: "HO RONG HUI",
       role: "Leader / Backend Developer",
       bio: "Guides the team to achieve project goals. Develops server-side systems and creates essential documentation.",
-      image: "/sample1.png",
+      image: "/Sample1.png",
       github: "https://github.com/username1"
     },
     {
       name: "CHEN XIAOJUAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample5.png",
+      image: "/Sample5.png",
       github: "https://github.com/username2"
     },
     {
       name: "LAI NIM LOONG RYAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample3.png",
+      image: "/Sample3.png",
       github: "https://github.com/username3"
     },
     {
       name: "PANG WAI PIN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample4.png",
+      image: "/Sample4.png",
       github: "https://github.com/username4"
     },
     {
       name: "VAN LE NGUYEN",
       role: "Full Stack Developer",
       bio: "Creates and updates essential documentation. Develops both front-end and backend components of the website.",
-      image: "/sample2.png",
+      image: "/Sample2.png",
       github: "https://github.com/username5"
     },
     {
       name: "ZENG LIHONG",
       role: "Backend Developer",
       bio: "Creates and updates essential documentation. Develops server-side systems.",
-      image: "/sample6.png",
+      image: "/Sample6.png",
       github: "https://github.com/username6"
     }
   ];
