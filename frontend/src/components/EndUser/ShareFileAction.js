@@ -16,6 +16,7 @@ const ShareFileAction = ({ file, user }) => {
     const [emails, setEmails] = useState([]);                       // state for an array for email
     const [showTooltip, setShowTooltip] = useState(false);          // state for tooltip visibility
     const [shareGenerated, setShareGenerated] = useState(false);    // state for share link generation
+    const [downloadMessage, setDownloadMessage] = useState('');     // state for download message
 
     const isPremium = user?.role === 'premium_user';
 
@@ -70,6 +71,13 @@ const ShareFileAction = ({ file, user }) => {
             return;
         }
 
+        // to validate no. of email (min 1)
+        if (emails.length === 0) {
+            setError('At least one email must be provided.');
+            setIsLoading(false);
+            return;
+        }
+
         try {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -115,6 +123,7 @@ const ShareFileAction = ({ file, user }) => {
             setShareGenerated(true);        // to set true, after share successful
             setEmailInput('');              // to clear the email input, after share successful
             console.log(emails);            // to debug
+            setDownloadMessage('Split successful!'); // to set download message
         } catch (error) {
             setError(error.message);
         } finally {
@@ -146,6 +155,7 @@ const ShareFileAction = ({ file, user }) => {
         setError('');
         setCopySuccess(false);
         setShareGenerated(false);   // to reset share link generation state
+        setDownloadMessage('');     // to reset download message
     };
 
     return (
@@ -295,6 +305,13 @@ const ShareFileAction = ({ file, user }) => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* DOWNLOAD MESSAGE */}
+                        {downloadMessage && (
+                            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                                {downloadMessage} <strong>Please download the fragment</strong>. This is a one-time action.
+                            </div>
+                        )}
                         
                         {/* SHARE LINK SECTION */}
                         {!shareLink ? (
@@ -350,7 +367,7 @@ const ShareFileAction = ({ file, user }) => {
                                     disabled={isLoading}
                                     className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
                                 >
-                                    {isLoading ? 'Generating Link...' : 'Generate Share Link'}
+                                    {isLoading ? 'Splitting...' : 'Split'}
                                 </button>
                             </form>
                         ) : (
