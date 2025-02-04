@@ -1,22 +1,20 @@
 package EndUser
 
 import (
+	"log"
 	"net/http"
 	"safesplit/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type PasswordResetController struct {
-	userModel            *models.UserModel
-	passwordHistoryModel *models.PasswordHistoryModel
-}
-
-func NewPasswordResetController(userModel *models.UserModel, passwordHistoryModel *models.PasswordHistoryModel) *PasswordResetController {
-	return &PasswordResetController{
-		userModel:            userModel,
-		passwordHistoryModel: passwordHistoryModel,
-	}
+    userModel            *models.UserModel
+    passwordHistoryModel *models.PasswordHistoryModel
+    keyRotationModel     *models.KeyRotationModel
+    keyFragmentModel     *models.KeyFragmentModel  
+    fileModel           *models.FileModel         
 }
 
 type PasswordResetRequest struct {
@@ -24,34 +22,78 @@ type PasswordResetRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }
 
+func NewPasswordResetController(
+    userModel *models.UserModel,
+    passwordHistoryModel *models.PasswordHistoryModel,
+    keyRotationModel *models.KeyRotationModel,
+    keyFragmentModel *models.KeyFragmentModel,
+    fileModel *models.FileModel,
+) *PasswordResetController {
+    return &PasswordResetController{
+        userModel:            userModel,
+        passwordHistoryModel: passwordHistoryModel,
+        keyRotationModel:     keyRotationModel,
+        keyFragmentModel:     keyFragmentModel,
+        fileModel:            fileModel,
+    }
+}
+
 func (c *PasswordResetController) ResetPassword(ctx *gin.Context) {
-	// Get authenticated user
-	user, exists := ctx.Get("user")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
+    startTime := time.Now()
+    log.Printf("Starting password reset process")
 
-	endUser, ok := user.(*models.User)
-	if !ok {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user data"})
-		return
-	}
+    user, exists := ctx.Get("user")
+    if !exists {
+        log.Printf("Password reset failed: No authenticated user found")
+        ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+        return
+    }
 
-	// Bind request body
-	var req PasswordResetRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request data"})
-		return
-	}
+    endUser, ok := user.(*models.User)
+    if !ok {
+        log.Printf("Password reset failed: Invalid user type in context")
+        ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user data"})
+        return
+    }
 
-	// Reset password using model method
-	if err := c.userModel.ResetPassword(endUser.ID, req.CurrentPassword, req.NewPassword, c.passwordHistoryModel); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    var req PasswordResetRequest
+    if err := ctx.ShouldBindJSON(&req); err != nil {
+        log.Printf("Password reset failed: Invalid request data - %v", err)
+        ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request data"})
+        return
+    }
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "password reset successful",
-	})
+    // Call the model method to handle all database operations
+    err := c.userModel.ResetPasswordWithFragments(
+        endUser.ID,
+        req.CurrentPassword,
+        req.NewPassword,
+        c.passwordHistoryModel,
+        c.keyFragmentModel,
+        c.fileModel,
+    )
+
+    if err != nil {
+        log.Printf("Password reset failed for user %d: %v", endUser.ID, err)
+        
+        // Map common errors to appropriate HTTP status codes
+        status := http.StatusInternalServerError
+        switch err.Error() {
+        case "current password is incorrect":
+            status = http.StatusBadRequest
+        case "user not found":
+            status = http.StatusNotFound
+        }
+        
+        ctx.JSON(status, gin.H{"error": err.Error()})
+        return
+    }
+
+    duration := time.Since(startTime)
+    log.Printf("Password reset successful for user %d - Duration: %v", endUser.ID, duration)
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "message": "password reset successful",
+        "details": "master key and file access keys have been secured with new password",
+    })
 }

@@ -9,29 +9,29 @@ import {
 import ViewUserAccounts from './SysAdmin/ViewUserAccounts';
 import ViewStorage from './SysAdmin/ViewStorage';
 import ViewDeletedAccounts from './SysAdmin/ViewDeletedAccounts';
+import ViewFeedback from './SysAdmin/ViewFeedback';
+import ViewReport from './SysAdmin/ViewReport';
 
 const SysAdminDashboard = ({ user, onLogout }) => {
-  const [isAccountsOpen, setIsAccountsOpen] = useState(false); // Initially closed
+  const [isAccountsOpen, setIsAccountsOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState('Dashboard');
   const [selectedUserType, setSelectedUserType] = useState('all');
-  const [recentViewedUsers, setRecentViewedUsers] = useState([]); // For Recent Viewed Users
+  const [recentViewedUsers, setRecentViewedUsers] = useState([]);
 
   const handleUserTypeSelect = (type) => {
     setSelectedUserType(type);
-    setSelectedSection('Account Management'); // Navigate to Account Management section
-    setIsAccountsOpen(false); // Close the dropdown after selection
+    setSelectedSection('Account Management');
+    setIsAccountsOpen(false);
   };
 
   const handleViewUser = (userId) => {
-
-    const user = getUserById(userId); 
+    const user = getUserById(userId);
     if (user && !recentViewedUsers.find(u => u.id === user.id)) {
-      setRecentViewedUsers(prev => [user, ...prev].slice(0, 5)); // Keep last 5
+      setRecentViewedUsers(prev => [user, ...prev].slice(0, 5));
     }
   };
 
   const getUserById = (id) => {
-
     return null;
   };
 
@@ -39,7 +39,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
     <div className="space-y-8">
       {/* Accounts Section */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Accounts</h2>
+        <h2 className="text-lg font-semibold mb-4">Account Types</h2>
         <div className="grid grid-cols-2 gap-4">
           <div 
             onClick={() => handleUserTypeSelect('premium')}
@@ -49,7 +49,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
             <div className="aspect-square flex items-center justify-center">
               <Users size={40} className="text-gray-400" />
             </div>
-            <p className="text-center mt-2 text-sm">Premium End users</p>
+            <p className="text-center mt-2 text-sm">Premium End Users</p>
           </div>
 
           <div 
@@ -60,12 +60,10 @@ const SysAdminDashboard = ({ user, onLogout }) => {
             <div className="aspect-square flex items-center justify-center">
               <Users size={40} className="text-gray-400" />
             </div>
-            <p className="text-center mt-2 text-sm">End users</p>
+            <p className="text-center mt-2 text-sm">End Users</p>
           </div>
         </div>
       </div>
-
-    
 
       {/* Recent Viewed Users Section */}
       <div>
@@ -93,24 +91,22 @@ const SysAdminDashboard = ({ user, onLogout }) => {
     </div>
   );
 
-  const renderAccountManagementContent = () => (
-    <div className="space-y-8">
-      <ViewUserAccounts selectedType={selectedUserType} />
-    </div>
-  );
-
   const renderMainContent = () => {
     switch (selectedSection) {
       case 'Dashboard':
         return renderDashboardContent();
       case 'Account Management':
-        return renderAccountManagementContent();
+        return <ViewUserAccounts selectedType={selectedUserType} />;
       case 'View Storage':
         return <ViewStorage />;
       case 'Deleted Accounts':
         return <ViewDeletedAccounts />;
+      case 'Feedback':
+        return <ViewFeedback feedbackType="feedback" />;
+      case 'Reports':
+        return <ViewReport feedbackType="suspicious_activity" />;
       case 'Settings':
-        return <Settings />; // Assuming you have a Settings component
+        return <div>Settings</div>;
       default:
         return renderDashboardContent();
     }
@@ -118,11 +114,13 @@ const SysAdminDashboard = ({ user, onLogout }) => {
 
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
       <div className="w-64 bg-gray-900 text-white flex flex-col">
         <div className="p-6 border-b border-gray-800 flex justify-center items-center">
           <img src="/safesplit-logo_white.png" alt="Logo" className="h-24 w-auto" />
         </div>
         
+        {/* Navigation */}
         <nav className="flex-1 p-4">
           <ul className="space-y-2">
             <li>
@@ -144,14 +142,11 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                   onClick={() => setIsAccountsOpen(!isAccountsOpen)}
                   className={`w-full flex items-center justify-between px-4 py-2 rounded transition-colors duration-200
                     hover:bg-gray-800 ${selectedSection === 'Account Management' ? 'bg-gray-800' : ''}`}
-                  aria-haspopup="true"
-                  aria-expanded={isAccountsOpen}
                 >
                   <span>Account Management</span>
                   {isAccountsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
 
-                {/* Dropdown Sub-items */}
                 {isAccountsOpen && (
                   <ul className="mt-2 space-y-1 pl-4">
                     <li>
@@ -169,7 +164,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                         className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-700
                           ${selectedUserType === 'premium' ? 'bg-gray-700' : ''}`}
                       >
-                        Premium End User
+                        Premium End Users
                       </button>
                     </li>
                     <li>
@@ -178,7 +173,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                         className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-700
                           ${selectedUserType === 'normal' ? 'bg-gray-700' : ''}`}
                       >
-                        End User
+                        End Users
                       </button>
                     </li>
                   </ul>
@@ -193,6 +188,26 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                   ${selectedSection === 'Deleted Accounts' ? 'bg-gray-800' : ''}`}
               >
                 Deleted Accounts
+              </button>
+            </li>
+
+            <li>
+              <button 
+                onClick={() => setSelectedSection('Feedback')}
+                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
+                  ${selectedSection === 'Feedback' ? 'bg-gray-800' : ''}`}
+              >
+                User Feedback
+              </button>
+            </li>
+
+            <li>
+              <button 
+                onClick={() => setSelectedSection('Reports')}
+                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
+                  ${selectedSection === 'Reports' ? 'bg-gray-800' : ''}`}
+              >
+                Suspicious Reports
               </button>
             </li>
 
@@ -231,16 +246,21 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
+      {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="p-8">
           <div className="mb-8">
             <h1 className="text-2xl font-semibold">
-              {selectedSection === 'Dashboard' ? 'Admin Dashboard' : `${selectedSection}`}
+              {selectedSection === 'Dashboard' ? 'Admin Dashboard' : 
+               selectedSection === 'Feedback' ? 'User Feedback' :
+               selectedSection === 'Reports' ? 'Suspicious Activity Reports' :
+               `${selectedSection}`}
             </h1>
             <p className="text-gray-600 mt-1">
-              {selectedSection === 'Dashboard' 
-                ? 'Monitor and manage system operations'
-                : `Manage ${selectedSection.toLowerCase()}`}
+              {selectedSection === 'Dashboard' ? 'Monitor and manage system operations' :
+               selectedSection === 'Feedback' ? 'View and manage user feedback and suggestions' :
+               selectedSection === 'Reports' ? 'Review and investigate reported activities' :
+               `Manage ${selectedSection.toLowerCase()}`}
             </p>
           </div>
 

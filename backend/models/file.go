@@ -1,52 +1,87 @@
 package models
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"safesplit/services"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
+type EncryptionType string
+
+const (
+	StandardEncryption EncryptionType = "standard" // AES-256-GCM
+	ChaCha20           EncryptionType = "chacha20" // ChaCha20-Poly1305
+	Twofish            EncryptionType = "twofish"  // Twofish
+)
+
 type File struct {
-	ID               uint       `json:"id" gorm:"primaryKey"`
-	UserID           uint       `json:"user_id"`
-	FolderID         *uint      `json:"folder_id,omitempty"`
-	Name             string     `json:"name"`
-	OriginalName     string     `json:"original_name"`
-	FilePath         string     `json:"file_path"`
-	Size             int64      `json:"size" gorm:"not null"`
-	CompressedSize   int64      `json:"compressed_size"`
-	IsCompressed     bool       `json:"is_compressed" gorm:"default:false"`
-	CompressionRatio float64    `json:"compression_ratio"`
-	MimeType         string     `json:"mime_type"`
-	IsArchived       bool       `json:"is_archived" gorm:"default:false"`
-	IsDeleted        bool       `json:"is_deleted" gorm:"default:false"`
-	DeletedAt        *time.Time `json:"deleted_at"`
-	EncryptionIV     []byte     `json:"encryption_iv" gorm:"type:binary(16);null"`
-	EncryptionSalt   []byte     `json:"encryption_salt" gorm:"type:binary(32);null"`
-	FileHash         string     `json:"file_hash"`
-	ShareCount       uint       `json:"share_count" gorm:"not null;default:2"`
-	Threshold        uint       `json:"threshold" gorm:"not null;default:2"`
-	DataShardCount   uint       `json:"data_shard_count" gorm:"not null;default:4"`
-	ParityShardCount uint       `json:"parity_shard_count" gorm:"not null;default:2"`
-	IsSharded        bool       `json:"is_sharded" gorm:"default:false"`
-	IsShared         bool       `json:"is_shared" gorm:"default:false"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                uint                    `json:"id" gorm:"primaryKey"`
+	UserID            uint                    `json:"user_id"`
+	FolderID          *uint                   `json:"folder_id,omitempty"`
+	Name              string                  `json:"name"`
+	OriginalName      string                  `json:"original_name"`
+	FilePath          string                  `json:"file_path"`
+	Size              int64                   `json:"size" gorm:"not null"`
+	CompressedSize    int64                   `json:"compressed_size"`
+	IsCompressed      bool                    `json:"is_compressed" gorm:"default:false"`
+	CompressionRatio  float64                 `json:"compression_ratio"`
+	MimeType          string                  `json:"mime_type"`
+	IsArchived        bool                    `json:"is_archived" gorm:"default:false"`
+	IsDeleted         bool                    `json:"is_deleted" gorm:"default:false"`
+	DeletedAt         *time.Time              `json:"deleted_at"`
+	EncryptionIV      []byte                  `json:"encryption_iv" gorm:"type:varbinary(24);null"`
+	EncryptionSalt    []byte                  `json:"encryption_salt" gorm:"type:binary(32);null"`
+	EncryptionType    services.EncryptionType `json:"encryption_type" gorm:"type:varchar(20);default:'standard'"`
+	EncryptionVersion int                     `json:"encryption_version" gorm:"default:1"`
+	ServerKeyID       string                  `json:"server_key_id" gorm:"type:varchar(64)"`
+	MasterKeyVersion  int                     `json:"master_key_version" gorm:"not null;default:1"`
+	FileHash          string                  `json:"file_hash"`
+	ShareCount        uint                    `json:"share_count" gorm:"not null;default:2"`
+	Threshold         uint                    `json:"threshold" gorm:"not null;default:2"`
+	DataShardCount    uint                    `json:"data_shard_count" gorm:"not null;default:4"`
+	ParityShardCount  uint                    `json:"parity_shard_count" gorm:"not null;default:2"`
+	IsSharded         bool                    `json:"is_sharded" gorm:"default:false"`
+	IsShared          bool                    `json:"is_shared" gorm:"default:false"`
+	CreatedAt         time.Time               `json:"created_at"`
+	UpdatedAt         time.Time               `json:"updated_at"`
 }
-
 type FileModel struct {
-	db        *gorm.DB
-	rsService *services.ReedSolomonService
+	db                *gorm.DB
+	rsService         *services.ReedSolomonService
+	serverKeyModel    *ServerMasterKeyModel
+	encryptionService *services.EncryptionService
+	keyFragmentModel  *KeyFragmentModel
 }
 
-func NewFileModel(db *gorm.DB, rsService *services.ReedSolomonService) *FileModel {
+func NewFileModel(
+	db *gorm.DB,
+	rsService *services.ReedSolomonService,
+	serverKeyModel *ServerMasterKeyModel,
+	encryptionService *services.EncryptionService,
+	keyFragmentModel *KeyFragmentModel,
+) *FileModel {
 	return &FileModel{
-		db:        db,
-		rsService: rsService,
+		db:                db,
+		rsService:         rsService,
+		serverKeyModel:    serverKeyModel,
+		encryptionService: encryptionService,
+		keyFragmentModel:  keyFragmentModel,
+	}
+}
+
+// validation method for encryption type
+func (f *File) ValidateEncryption() error {
+	switch f.EncryptionType {
+	case services.StandardEncryption, services.ChaCha20, services.Twofish:
+		return nil
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", f.EncryptionType)
 	}
 }
 
@@ -60,6 +95,16 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 		return fmt.Errorf("file name is required")
 	}
 
+	// Add encryption validation
+	if err := file.ValidateEncryption(); err != nil {
+		return err
+	}
+
+	// Add IV size validation
+	if err := file.ValidateIVSize(); err != nil {
+		return err
+	}
+
 	result := tx.Create(file)
 	if result.Error != nil {
 		return fmt.Errorf("failed to create file record: %w", result.Error)
@@ -70,63 +115,111 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 	return nil
 }
 
-func (m *FileModel) CreateFileWithShards(file *File, shares []services.KeyShare, shards [][]byte, keyFragmentModel *KeyFragmentModel) error {
-	tx := m.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+func (m *FileModel) CreateFileWithShards(
+	file *File,
+	shares []services.KeyShare,
+	shards [][]byte,
+	keyFragmentModel *KeyFragmentModel,
+	serverKeyModel *ServerMasterKeyModel,
+) error {
+	return withTransactionRetry(m.db, 3, func(tx *gorm.DB) error {
+		// 1. Create file record
+		if err := m.CreateFile(tx, file); err != nil {
+			return fmt.Errorf("failed to create file record: %w", err)
 		}
-	}()
 
-	// Verify folder if provided
-	if file.FolderID != nil {
-		var folder Folder
-		if err := tx.Where("id = ? AND user_id = ? AND is_archived = ?",
-			file.FolderID, file.UserID, false).First(&folder).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("invalid folder: %w", err)
+		// 2. Store shards
+		if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
+			return fmt.Errorf("failed to store shards: %w", err)
 		}
-	}
 
-	// Create file record
-	if err := m.CreateFile(tx, file); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create file record: %w", err)
-	}
+		// 3. Save key fragments
+		if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
+			m.rsService.DeleteShards(file.ID) // clean up
+			return fmt.Errorf("failed to save key fragments: %w", err)
+		}
 
-	// Store the Reed-Solomon shards
-	if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to store shards: %w", err)
-	}
+		// 4. Update user storage
+		if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+			m.rsService.DeleteShards(file.ID)
+			return fmt.Errorf("failed to update storage usage: %w", err)
+		}
 
-	// Save key fragments
-	if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares); err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to save key fragments: %w", err)
-	}
+		// 5. Log activity
+		activity := &ActivityLog{
+			UserID:       file.UserID,
+			ActivityType: "upload",
+			FileID:       &file.ID,
+			Status:       "success",
+			Details: fmt.Sprintf("File uploaded with %s encryption, %d shards",
+				file.EncryptionType, len(shards)),
+		}
+		if err := tx.Create(activity).Error; err != nil {
+			m.rsService.DeleteShards(file.ID)
+			return fmt.Errorf("failed to log activity: %w", err)
+		}
 
-	// Update user storage
-	if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		tx.Rollback()
-		return fmt.Errorf("failed to update storage usage: %w", err)
-	}
+		// If everything succeeded, return nil
+		return nil
+	})
+}
 
-	if err := tx.Commit().Error; err != nil {
-		// Clean up stored shards on failure
-		m.rsService.DeleteShards(file.ID)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+func withTransactionRetry(db *gorm.DB, maxRetries int, fn func(tx *gorm.DB) error) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		tx := db.Begin()
+		if tx.Error != nil {
+			return tx.Error
+		}
 
-	return nil
+		err = fn(tx)
+		if err != nil {
+			tx.Rollback()
+
+			// Check if it's a deadlock (or use an error code check if your driver exposes it)
+			if strings.Contains(strings.ToLower(err.Error()), "deadlock") {
+				continue // retry
+			}
+			return err
+		}
+
+		err = tx.Commit().Error
+		if err == nil {
+			// Transaction committed successfully
+			return nil
+		}
+
+		// If commit fails due to deadlock, retry
+		if strings.Contains(strings.ToLower(err.Error()), "deadlock") {
+			continue
+		}
+		return err
+	}
+	// If we exhausted retries, return the last error
+	return err
 }
 
 // ReadFileShards retrieves and reconstructs the file content from shards
 func (m *FileModel) ReadFileShards(file *File) ([]byte, error) {
+	log.Printf("Reading file shards - ID: %d, Encryption: %s", file.ID, file.EncryptionType)
+
+	// Get key fragments for decryption
+	fragmentsWithData, err := m.keyFragmentModel.GetKeyFragments(file.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key fragments: %w", err)
+	}
+
+	// Convert FragmentData to KeyShare
+	keyShares := make([]services.KeyShare, len(fragmentsWithData))
+	for i, fragment := range fragmentsWithData {
+		keyShares[i] = services.KeyShare{
+			Index:      fragment.FragmentIndex,
+			Value:      hex.EncodeToString(fragment.Data),
+			HolderType: string(fragment.HolderType),
+			NodeIndex:  fragment.NodeIndex,
+		}
+	}
+
 	// Retrieve all available shards
 	fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
 	if err != nil {
@@ -144,15 +237,64 @@ func (m *FileModel) ReadFileShards(file *File) ([]byte, error) {
 		return nil, fmt.Errorf("failed to reconstruct file: %w", err)
 	}
 
-	return reconstructed, nil
+	log.Printf("File reconstructed - Size: %d bytes", len(reconstructed))
+
+	// Use the unified DecryptFileWithType method
+	decrypted, err := m.encryptionService.DecryptFileWithType(
+		reconstructed,
+		file.EncryptionIV,
+		keyShares,
+		int(file.Threshold),
+		file.EncryptionSalt,
+		file.EncryptionType,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt file: %w", err)
+	}
+
+	log.Printf("File decrypted successfully - Final size: %d bytes", len(decrypted))
+	return decrypted, nil
+}
+func (m *FileModel) GetFileEncryptionInfo(fileID uint) (*struct {
+	Type      services.EncryptionType `json:"type"`
+	Version   int                     `json:"version"`
+	Algorithm string                  `json:"algorithm"`
+}, error) {
+	var file File
+	err := m.db.Select("encryption_type, encryption_version").
+		Where("id = ?", fileID).
+		First(&file).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get encryption info: %w", err)
+	}
+
+	var algorithm string
+	switch file.EncryptionType {
+	case services.StandardEncryption:
+		algorithm = "AES-256-GCM"
+	case services.ChaCha20:
+		algorithm = "ChaCha20-Poly1305"
+	case services.Twofish:
+		algorithm = "Twofish-256"
+	}
+
+	return &struct {
+		Type      services.EncryptionType `json:"type"`
+		Version   int                     `json:"version"`
+		Algorithm string                  `json:"algorithm"`
+	}{
+		Type:      file.EncryptionType,
+		Version:   file.EncryptionVersion,
+		Algorithm: algorithm,
+	}, nil
 }
 
 func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 	var file File
-	err := m.db.Where("id = ? AND is_deleted = ?", fileID, false).First(&file).Error
+	err := m.db.Where("id = ? AND is_deleted = ? AND is_archived = ?", fileID, false, false).First(&file).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("file not found")
+			return nil, fmt.Errorf("file not found or inaccessible")
 		}
 		return nil, fmt.Errorf("database error: %w", err)
 	}
@@ -162,8 +304,8 @@ func (m *FileModel) GetFileByID(fileID uint) (*File, error) {
 // GetFileForDownload updated to handle Reed-Solomon shards
 func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 	var file File
-	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, false).
-		First(&file).Error
+	err := m.db.Where("id = ? AND user_id = ? AND is_deleted = ? AND is_archived = ?",
+		fileID, userID, false, false).First(&file).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -173,7 +315,6 @@ func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 		return nil, fmt.Errorf("database error: %w", err)
 	}
 
-	// Log the request
 	log.Printf("File download requested - ID: %d, Path: %s, Owner: %d, IsSharded: %v",
 		file.ID, file.FilePath, file.UserID, file.IsSharded)
 
@@ -213,7 +354,6 @@ func (m *FileModel) ListUserFilesInFolder(userID uint, folderID *uint) ([]File, 
 }
 
 // File operations
-// DeleteFile updates to handle Reed-Solomon shards
 func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	tx := m.db.Begin()
 
@@ -241,24 +381,13 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		return fmt.Errorf("failed to delete file: %w", result.Error)
 	}
 
-	// Handle physical file deletion based on storage type
-	if file.IsSharded {
-		log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
-		// Delete shards
-		if err := m.rsService.DeleteShards(fileID); err != nil {
-			tx.Rollback()
-			log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
-			return fmt.Errorf("failed to delete shards: %w", err)
-		}
-		log.Printf("Successfully deleted shards for file %d", fileID)
-	} else {
-		// Delete regular file if it exists
-		if file.FilePath != "" {
-			if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
-				log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
-				// Don't rollback here as the file might have been already moved/deleted
-				log.Printf("Continuing deletion process despite file removal error")
-			}
+	// Keep shards for potential recovery
+	// We'll only delete physical files for non-sharded files
+	if !file.IsSharded && file.FilePath != "" {
+		if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
+			// Don't rollback here as the file might have been already moved/deleted
+			log.Printf("Continuing deletion process despite file removal error")
 		}
 	}
 
@@ -276,7 +405,7 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		FileID:       &fileID,
 		IPAddress:    ipAddress,
 		Status:       "success",
-		Details:      fmt.Sprintf("File deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
+		Details:      fmt.Sprintf("File marked as deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
 	}
 
 	if err := tx.Create(activity).Error; err != nil {
@@ -285,7 +414,6 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 		return fmt.Errorf("failed to log activity: %w", err)
 	}
 
-	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
 		log.Printf("Failed to commit deletion transaction - File ID: %d, Error: %v", fileID, err)
 		return fmt.Errorf("failed to complete delete operation: %w", err)
@@ -294,7 +422,6 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	log.Printf("Successfully completed file deletion - ID: %d", fileID)
 	return nil
 }
-
 func (m *FileModel) ArchiveFile(fileID, userID uint, ipAddress string) error {
 	tx := m.db.Begin()
 
@@ -435,7 +562,6 @@ func (m *FileModel) GetRecoverableFiles(userID uint) ([]File, error) {
 }
 
 // RecoverFile recovers a deleted file and updates storage usage
-// RecoverFile updated to handle Reed-Solomon shards
 func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	tx := m.db.Begin()
 	defer func() {
@@ -539,7 +665,7 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	// Log recovery activity
 	activity := &ActivityLog{
 		UserID:       userID,
-		ActivityType: "recover",
+		ActivityType: "restore",
 		FileID:       &file.ID,
 		Status:       "success",
 		Details:      fmt.Sprintf("File recovered (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
@@ -570,4 +696,136 @@ func (m *FileModel) GetUserFileCount(userID uint) (int64, error) {
 		return 0, fmt.Errorf("failed to count files: %w", err)
 	}
 	return count, nil
+}
+func (f *File) ValidateIVSize() error {
+	var expectedSize int
+	switch f.EncryptionType {
+	case services.ChaCha20:
+		expectedSize = 24 // XChaCha20-Poly1305
+	case services.Twofish:
+		expectedSize = 12 // Twofish-GCM
+	case services.StandardEncryption:
+		expectedSize = 16 // AES-GCM
+	default:
+		return fmt.Errorf("unsupported encryption type: %s", f.EncryptionType)
+	}
+
+	if len(f.EncryptionIV) != expectedSize {
+		return fmt.Errorf("invalid IV length for %s encryption: got %d, expected %d",
+			f.EncryptionType, len(f.EncryptionIV), expectedSize)
+	}
+	return nil
+}
+func (m *FileModel) PermanentlyDeleteFile(fileID, userID uint, ipAddress string) error {
+    tx := m.db.Begin()
+
+    log.Printf("Starting permanent file deletion process - File ID: %d, User ID: %d", fileID, userID)
+
+    // Get file info first
+    var file File
+    if err := tx.Where("id = ? AND user_id = ?", fileID, userID).First(&file).Error; err != nil {
+        tx.Rollback()
+        log.Printf("File not found - ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("file not found: %w", err)
+    }
+
+    log.Printf("Found file to permanently delete - ID: %d, IsSharded: %v, Size: %d bytes",
+        file.ID, file.IsSharded, file.Size)
+
+    // Handle physical data deletion
+    if file.IsSharded {
+        log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
+        // Delete shards
+        if err := m.rsService.DeleteShards(fileID); err != nil {
+            tx.Rollback()
+            log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
+            return fmt.Errorf("failed to delete shards: %w", err)
+        }
+        log.Printf("Successfully deleted shards for file %d", fileID)
+    } else if file.FilePath != "" {
+        // Delete regular file if it exists
+        if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
+            log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
+            // Don't rollback here as we want to continue with database cleanup
+        }
+    }
+
+    // Delete related key fragments
+    if err := tx.Where("file_id = ?", fileID).Delete(&KeyFragment{}).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete key fragments - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete key fragments: %w", err)
+    }
+
+    // Delete related activity logs
+    if err := tx.Where("file_id = ?", fileID).Delete(&ActivityLog{}).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete activity logs - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete activity logs: %w", err)
+    }
+
+    // Finally, delete the file record
+    if err := tx.Delete(&file).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to delete file record - ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to delete file record: %w", err)
+    }
+
+    // Log the permanent deletion activity (in a separate table for audit history)
+    permanentDeletionLog := &PermanentDeletionLog{
+        UserID:       userID,
+        FileName:     file.Name,
+        OriginalID:   fileID,
+        Size:        file.Size,
+        IsSharded:   file.IsSharded,
+        IPAddress:   ipAddress,
+        DeletedAt:   time.Now(),
+        Details:     fmt.Sprintf("File permanently deleted (Sharded: %v, Size: %d bytes)", file.IsSharded, file.Size),
+    }
+
+    if err := tx.Create(permanentDeletionLog).Error; err != nil {
+        tx.Rollback()
+        log.Printf("Failed to create permanent deletion log - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to log permanent deletion: %w", err)
+    }
+
+    if err := tx.Commit().Error; err != nil {
+        log.Printf("Failed to commit permanent deletion transaction - File ID: %d, Error: %v", fileID, err)
+        return fmt.Errorf("failed to complete permanent deletion: %w", err)
+    }
+
+    log.Printf("Successfully completed permanent file deletion - ID: %d", fileID)
+    return nil
+}
+
+// PermanentDeletionLog represents an audit log for permanent deletions
+type PermanentDeletionLog struct {
+    ID          uint      `gorm:"primaryKey"`
+    UserID      uint      `gorm:"not null"`
+    FileName    string    `gorm:"not null"`
+    OriginalID  uint      `gorm:"not null"`
+    Size        int64     `gorm:"not null"`
+    IsSharded   bool      `gorm:"not null"`
+    IPAddress   string    `gorm:"not null"`
+    DeletedAt   time.Time `gorm:"not null"`
+    Details     string    `gorm:"type:text"`
+}
+func (m *FileModel) CleanupOldDeletedFiles(retentionDays int) error {
+    cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
+    
+    var filesToDelete []File
+    if err := m.db.Where("is_deleted = ? AND deleted_at < ?", true, cutoffDate).Find(&filesToDelete).Error; err != nil {
+        return fmt.Errorf("failed to fetch old deleted files: %w", err)
+    }
+
+    for _, file := range filesToDelete {
+        log.Printf("Cleaning up old deleted file - ID: %d, DeletedAt: %v", file.ID, file.DeletedAt)
+        if err := m.PermanentlyDeleteFile(file.ID, file.UserID, "system"); err != nil {
+            log.Printf("Failed to cleanup file %d: %v", file.ID, err)
+            // Continue with other files even if one fails
+            continue
+        }
+    }
+
+    return nil
 }

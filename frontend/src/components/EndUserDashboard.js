@@ -7,6 +7,8 @@ import Settings from './EndUser/Settings';
 import ContactUs from './EndUser/ContactUs';
 import CreateFolder from './EndUser/CreateFolder';
 import DeleteFolder from './EndUser/DeleteFolder';
+import MassUploadFile from './EndUser/MassUploadFile';
+import UploadButton from './EndUser/UploadButton';
 
 const EndUserDashboard = ({ user, onLogout }) => {
     const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -22,6 +24,9 @@ const EndUserDashboard = ({ user, onLogout }) => {
     const [folderToDelete, setFolderToDelete] = useState(null);
     const [error, setError] = useState(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [isMassUploadModalOpen, setIsMassUploadModalOpen] = useState(false);
+
+
 
     useEffect(() => {
         if (selectedSection === 'Dashboard') {
@@ -327,28 +332,24 @@ const EndUserDashboard = ({ user, onLogout }) => {
                     <div className="flex justify-between items-center mb-8">
                         <h1 className="text-2xl font-semibold">{selectedSection}</h1>
                         {selectedSection !== 'Settings' && selectedSection !== 'Contact Us' && (
-                            <div className="flex items-center space-x-4">
-                                <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
-                                    <Search size={20} className="text-gray-400 mr-2" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search files..."
-                                        value={searchQuery}
-                                        onChange={handleSearch}
-                                        className="bg-transparent outline-none w-64"
-                                    />
-                                </div>
-                                
-                                <button 
-                                    onClick={() => setIsUploadModalOpen(true)}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                                    aria-label="Upload file"
-                                >
-                                    <Upload size={20} />
-                                    <span>Upload File</span>
-                                </button>
+                        <div className="flex items-center space-x-4">
+                            <div className="flex items-center bg-gray-100 rounded-md px-3 py-2">
+                                <Search size={20} className="text-gray-400 mr-2" />
+                                <input
+                                    type="text"
+                                    placeholder="Search files..."
+                                    value={searchQuery}
+                                    onChange={handleSearch}
+                                    className="bg-transparent outline-none w-64"
+                                />
                             </div>
-                        )}
+                            
+                            <UploadButton 
+                                onSingleUpload={() => setIsUploadModalOpen(true)}
+                                onMassUpload={() => setIsMassUploadModalOpen(true)}
+                            />
+                        </div>
+                    )}
                     </div>
 
                     {selectedSection === 'Settings' && <Settings user={user} />}
@@ -366,6 +367,13 @@ const EndUserDashboard = ({ user, onLogout }) => {
                     )}
                 </div>
             </div>
+            <MassUploadFile
+                isOpen={isMassUploadModalOpen}
+                onClose={() => setIsMassUploadModalOpen(false)}
+                onUpload={handleUploadComplete}
+                user={user}
+                currentFolder={currentFolder}
+            />
 
             <UploadFile
                 isOpen={isUploadModalOpen}

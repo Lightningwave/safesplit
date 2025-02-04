@@ -13,7 +13,10 @@ type CreateAccountController struct {
 	passwordHistoryModel *models.PasswordHistoryModel
 }
 
-func NewCreateAccountController(userModel *models.UserModel, passwordHistoryModel *models.PasswordHistoryModel) *CreateAccountController {
+func NewCreateAccountController(
+	userModel *models.UserModel,
+	passwordHistoryModel *models.PasswordHistoryModel,
+) *CreateAccountController {
 	return &CreateAccountController{
 		userModel:            userModel,
 		passwordHistoryModel: passwordHistoryModel,
@@ -45,7 +48,7 @@ func (c *CreateAccountController) CreateAccount(ctx *gin.Context) {
 		return
 	}
 
-	// Create user object
+	// Create user object with basic fields
 	user := &models.User{
 		Username:           req.Username,
 		Email:              req.Email,
@@ -55,14 +58,14 @@ func (c *CreateAccountController) CreateAccount(ctx *gin.Context) {
 		StorageQuota:       models.DefaultStorageQuota,
 	}
 
-	// Create the user in the database
+	// Create the user - model will handle master key generation
 	createdUser, err := c.userModel.Create(user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Clear sensitive data
+	// Clear sensitive data before returning
 	createdUser.Password = ""
 
 	response := CreateAccountResponse{

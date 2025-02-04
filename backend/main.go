@@ -5,37 +5,86 @@ import (
 	"log"
 	"os"
 	"safesplit/config"
+	"safesplit/jobs"
 	"safesplit/models"
 	"safesplit/routes"
 	"safesplit/services"
+	"strconv"
+	"time"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	baseStoragePath = "storage"
+	nodeCount       = 3
+)
+
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+}
 func main() {
 	// Initialize database connection
 	db, err := config.SetupDatabase()
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+	// Initialize SMTP config from environment
+	smtpConfig := services.SMTPConfig{
+		Host: os.Getenv("SMTP_HOST"),
+		Port: func() int {
+			port, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
+			if err != nil {
+				return 587
+			}
+			return port
+		}(),
+		Username:  os.Getenv("SMTP_USERNAME"),
+		Password:  os.Getenv("SMTP_PASSWORD"),
+		FromName:  os.Getenv("SMTP_FROM_NAME"),
+		FromEmail: os.Getenv("SMTP_FROM_EMAIL"),
+	}
+	// Initialize email services
+	emailService, err := services.NewSMTPEmailService(smtpConfig)
+	if err != nil {
+		log.Fatal("Failed to initialize email service:", err)
+	}
+	twoFactorService := services.NewTwoFactorAuthService(emailService)
 
-	// Create storage directories
-	if err := createStorageDirectories(); err != nil {
-		log.Fatal("Failed to create storage directories:", err)
+	// Initialize subscription handler and scheduler
+	subscriptionHandler := jobs.NewSubscriptionHandler(db)
+	jobs.StartSubscriptionScheduler(subscriptionHandler)
+
+	// Initialize distributed storage service
+	storageService, err := services.NewDistributedStorageService(baseStoragePath, nodeCount)
+	if err != nil {
+		log.Fatal("Failed to initialize distributed storage:", err)
+	}
+	// Initialize subscription handler
+
+	// Initialize server master key
+	serverMasterKeyModel := models.NewServerMasterKeyModel(db)
+	if err := serverMasterKeyModel.Initialize(); err != nil {
+		log.Fatal("Failed to initialize server master key:", err)
 	}
 
 	// Initialize all required models
-	userModel := models.NewUserModel(db)
+	userModel := models.NewUserModel(db, twoFactorService)
 	passwordHistoryModel := models.NewPasswordHistoryModel(db)
 	billingModel := models.NewBillingModel(db, userModel)
 	activityLogModel := models.NewActivityLogModel(db)
 	folderModel := models.NewFolderModel(db)
 	fileShareModel := models.NewFileShareModel(db)
-	keyFragmentModel := models.NewKeyFragmentModel(db)
+	keyFragmentModel := models.NewKeyFragmentModel(db, storageService)
+	keyRotationModel := models.NewKeyRotationModel(db)
+	feedbackModel := models.NewFeedbackModel(db)
 
 	// Initialize core services
-	shamirService := services.NewShamirService()
+	shamirService := services.NewShamirService(nodeCount)
 	encryptionService := services.NewEncryptionService(shamirService)
 
 	// Initialize compression service
@@ -45,13 +94,38 @@ func main() {
 	}
 	defer compressionService.Close()
 
-	// Initialize Reed-Solomon service with distributed storage
-	rsService, err := services.NewReedSolomonService("storage/shards", 3) // Using 3 storage nodes
+	// Initialize Reed-Solomon service with the same storage service
+	rsService, err := services.NewReedSolomonService(storageService)
 	if err != nil {
 		log.Fatal("Failed to initialize Reed-Solomon service:", err)
 	}
-	fileModel := models.NewFileModel(db, rsService)
 
+	// Initialize file model with server master key model
+	fileModel := models.NewFileModel(
+		db,
+		rsService,
+		serverMasterKeyModel,
+		encryptionService,
+		keyFragmentModel,
+	)
+	// Start cleanup scheduler for deleted files
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour) 
+		defer ticker.Stop()
+
+		log.Println("Starting file cleanup scheduler...")
+		for {
+			select {
+			case <-ticker.C:
+				log.Println("Starting scheduled cleanup of old deleted files...")
+				if err := fileModel.CleanupOldDeletedFiles(30); err != nil {
+					log.Printf("Error during scheduled file cleanup: %v", err)
+				} else {
+					log.Println("Completed scheduled cleanup of old deleted files")
+				}
+			}
+		}
+	}()
 	// Initialize route handlers with all required dependencies
 	handlers := routes.NewRouteHandlers(
 		db,
@@ -63,10 +137,14 @@ func main() {
 		folderModel,
 		fileShareModel,
 		keyFragmentModel,
+		keyRotationModel,
+		serverMasterKeyModel,
+		feedbackModel,
 		encryptionService,
 		shamirService,
 		compressionService,
 		rsService,
+		twoFactorService,
 	)
 
 	// Set up the Gin router with default middleware
@@ -114,20 +192,4 @@ func main() {
 	if err := router.Run(port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
-}
-
-// createStorageDirectories ensures the required storage directories exist
-func createStorageDirectories() error {
-	// Create main storage directories
-	paths := []string{
-		"storage/shards",
-	}
-
-	for _, path := range paths {
-		if err := os.MkdirAll(path, 0700); err != nil {
-			return fmt.Errorf("failed to create storage directory %s: %w", path, err)
-		}
-	}
-
-	return nil
 }

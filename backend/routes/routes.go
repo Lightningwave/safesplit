@@ -18,6 +18,7 @@ type RouteHandlers struct {
 	LoginController           *controllers.LoginController
 	SuperAdminLoginController *SuperAdmin.LoginController
 	CreateAccountController   *controllers.CreateAccountController
+	TwoFactorController       *EndUser.TwoFactorController
 	SuperAdminHandlers        *SuperAdminHandlers
 	SysAdminHandlers          *SysAdminHandlers
 	EndUserHandlers           *EndUserHandlers
@@ -25,17 +26,25 @@ type RouteHandlers struct {
 }
 
 type EndUserHandlers struct {
-	UploadFileController    *EndUser.UploadFileController
-	ViewFilesController     *EndUser.ViewFilesController
-	DownloadFileController  *EndUser.DownloadFileController
-	DeleteFileController    *EndUser.DeleteFileController
-	ArchiveFileController   *EndUser.ArchiveFileController
-	ShareFileController     *EndUser.ShareFileController
-	CreateFolderController  *EndUser.CreateFolderController
-	ViewFolderController    *EndUser.ViewFolderController
-	DeleteFolderController  *EndUser.DeleteFolderController
-	PasswordResetController *EndUser.PasswordResetController
-	ViewStorageController   *EndUser.ViewStorageController
+	UploadFileController     *EndUser.UploadFileController
+	MassUploadController     *EndUser.MassUploadFileController
+	ViewFilesController      *EndUser.ViewFilesController
+	DownloadFileController   *EndUser.DownloadFileController
+	MassDownloadController   *EndUser.MassDownloadFileController
+	DeleteFileController     *EndUser.DeleteFileController
+	MassDeleteFileController *EndUser.MassDeleteFileController
+	ArchiveFileController    *EndUser.ArchiveFileController
+	MassArchiveController    *EndUser.MassArchiveFileController
+	ShareFileController      *EndUser.ShareFileController
+	CreateFolderController   *EndUser.CreateFolderController
+	ViewFolderController     *EndUser.ViewFolderController
+	DeleteFolderController   *EndUser.DeleteFolderController
+	PasswordResetController  *EndUser.PasswordResetController
+	ViewStorageController    *EndUser.ViewStorageController
+	PaymentController        *EndUser.PaymentController
+	SubscriptionController   *EndUser.SubscriptionController
+	ReportController         *EndUser.ReportController
+	FeedbackController       *EndUser.FeedbackController
 }
 type PremiumUserHandlers struct {
 	FragmentController          *PremiumUser.FragmentController
@@ -58,6 +67,8 @@ type SysAdminHandlers struct {
 	ViewDeletedUserAccountController *SysAdmin.ViewDeletedUserAccountController
 	ViewUserStorageController        *SysAdmin.ViewUserStorageController
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
+	ViewFeedbacksController         *SysAdmin.ViewFeedbacksController   
+    ViewReportsController           *SysAdmin.ViewReportsController 
 }
 
 func NewRouteHandlers(
@@ -70,16 +81,21 @@ func NewRouteHandlers(
 	folderModel *models.FolderModel,
 	fileShareModel *models.FileShareModel,
 	keyFragmentModel *models.KeyFragmentModel,
+	keyRotationModel *models.KeyRotationModel,
+	serverMasterKeyModel *models.ServerMasterKeyModel,
+	feedbackModel *models.FeedbackModel,
 	encryptionService *services.EncryptionService,
 	shamirService *services.ShamirService,
 	compressionService *services.CompressionService,
 	rsService *services.ReedSolomonService,
+	twoFactorService *services.TwoFactorAuthService,
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
 		LoginController:           controllers.NewLoginController(userModel, billingModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
+		TwoFactorController:       EndUser.NewTwoFactorController(userModel),
 		SuperAdminHandlers: &SuperAdminHandlers{
 			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
@@ -94,24 +110,34 @@ func NewRouteHandlers(
 			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
+			ViewFeedbacksController:         SysAdmin.NewViewFeedbacksController(feedbackModel),
+			ViewReportsController:           SysAdmin.NewViewReportsController(feedbackModel, userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
-			UploadFileController:    EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService),
-			ViewFilesController:     EndUser.NewViewFilesController(fileModel, folderModel),
-			DownloadFileController:  EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService),
-			DeleteFileController:    EndUser.NewDeleteFileController(fileModel),
-			ArchiveFileController:   EndUser.NewArchiveFileController(fileModel),
-			ShareFileController:     EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
-			CreateFolderController:  EndUser.NewCreateFolderController(folderModel, activityLogModel),
-			ViewFolderController:    EndUser.NewViewFolderController(folderModel, fileModel),
-			DeleteFolderController:  EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController: EndUser.NewPasswordResetController(userModel, passwordHistoryModel),
-			ViewStorageController:   EndUser.NewViewStorageController(fileModel, userModel),
+			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
+			MassUploadController:     EndUser.NewMassUploadFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
+			ViewFilesController:      EndUser.NewViewFilesController(fileModel, folderModel),
+			DownloadFileController:   EndUser.NewDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
+			MassDownloadController:   EndUser.NewMassDownloadFileController(fileModel, keyFragmentModel, encryptionService, activityLogModel, compressionService, rsService, serverMasterKeyModel),
+			DeleteFileController:     EndUser.NewDeleteFileController(fileModel),
+			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
+			ArchiveFileController:    EndUser.NewArchiveFileController(fileModel),
+			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
+			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
+			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
+			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
+			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel, keyFragmentModel, fileModel),
+			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
+			PaymentController:        EndUser.NewPaymentController(billingModel),
+			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
+			ReportController:   EndUser.NewReportController(feedbackModel, fileModel),
+			FeedbackController: EndUser.NewFeedbackController(feedbackModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
-			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService),
+			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
 		},
 	}
 }
@@ -141,6 +167,14 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	protected.GET("/me", handlers.LoginController.GetMe)
 
+	// 2FA routes
+	twoFactor := protected.Group("/2fa")
+	{
+		twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
+		twoFactor.POST("/disable", handlers.TwoFactorController.DisableEmailTwoFactor)
+		twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
+	}
+
 	// End User routes should be first as they're most commonly accessed
 	setupEndUserRoutes(protected, handlers.EndUserHandlers)
 
@@ -166,9 +200,15 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	{
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
 		files.GET("/:id/download", handlers.DownloadFileController.Download)
+		files.POST("/mass-download", handlers.MassDownloadController.MassDownload)
+		files.GET("/mass-download/:id", handlers.MassDownloadController.GetFile)
 		files.POST("/upload", handlers.UploadFileController.Upload)
+		files.POST("/mass-upload", handlers.MassUploadController.MassUpload)
+		files.GET("/encryption/options", handlers.UploadFileController.GetEncryptionOptions)
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
+		files.POST("/mass-delete", handlers.MassDeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
+		files.POST("/mass-archive", handlers.MassArchiveController.Archive)
 		files.POST("/:id/share", handlers.ShareFileController.CreateShare)
 		files.GET("/share/:shareLink", handlers.ShareFileController.AccessShare)
 	}
@@ -184,6 +224,26 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	{
 		storage.GET("/info", handlers.ViewStorageController.GetStorageInfo)
 	}
+	payment := protected.Group("/payment")
+	{
+		payment.POST("/upgrade", handlers.PaymentController.ProcessPayment)
+		payment.GET("/status", handlers.PaymentController.GetPaymentStatus)
+		payment.POST("/cancel", handlers.SubscriptionController.CancelSubscription)
+	}
+	feedback := protected.Group("/feedback")
+    {
+        feedback.POST("", handlers.FeedbackController.SubmitFeedback)
+        feedback.GET("", handlers.FeedbackController.GetUserFeedback)
+        feedback.GET("/categories", handlers.FeedbackController.GetFeedbackCategories)
+    }
+
+    reports := protected.Group("/reports")
+    {
+        reports.POST("/file/:id", handlers.ReportController.ReportFile)
+        reports.POST("/share/:shareLink", handlers.ReportController.ReportShare)
+        reports.GET("", handlers.ReportController.GetUserReports)
+    }
+
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
 	// Fragment management routes
@@ -223,4 +283,20 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 	}
 
 	sysAdmin.GET("/storage/stats", handlers.ViewUserStorageController.GetStorageStats)
+
+	feedback := sysAdmin.Group("/feedback")
+    {
+        feedback.GET("", handlers.ViewFeedbacksController.GetAllFeedbacks)
+        feedback.GET("/:id", handlers.ViewFeedbacksController.GetFeedback)
+        feedback.PUT("/:id/status", handlers.ViewFeedbacksController.UpdateFeedbackStatus)
+        feedback.GET("/stats", handlers.ViewFeedbacksController.GetFeedbackStats)
+    }
+
+    reports := sysAdmin.Group("/reports")
+    {
+        reports.GET("", handlers.ViewReportsController.GetAllReports)
+        reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
+        reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
+        reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
+    }
 }

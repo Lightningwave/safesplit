@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -18,6 +19,7 @@ type FileShare struct {
 	PasswordHash         string     `json:"-"`
 	PasswordSalt         string     `json:"-"`
 	EncryptedKeyFragment []byte     `json:"-" gorm:"type:mediumblob"`
+	FragmentIndex        int        `json:"-" gorm:"not null"`
 	ExpiresAt            *time.Time `json:"expires_at"`
 	MaxDownloads         *int       `json:"max_downloads"`
 	DownloadCount        int        `json:"download_count" gorm:"default:0"`
@@ -193,8 +195,40 @@ func (m *FileShareModel) ValidateShare(shareLink string, password string) (*File
 }
 
 func (m *FileShareModel) IncrementDownloadCount(shareID uint) error {
-	return m.db.Model(&FileShare{}).
+	log.Printf("Starting IncrementDownloadCount for share ID %d", shareID)
+
+	// Start transaction
+	tx := m.db.Begin()
+	if tx.Error != nil {
+		log.Printf("Failed to start transaction: %v", tx.Error)
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+	defer tx.Rollback() // rollback if not committed
+
+	log.Printf("Started transaction for share ID %d", shareID)
+
+	result := tx.Model(&FileShare{}).
 		Where("id = ?", shareID).
-		UpdateColumn("download_count", gorm.Expr("download_count + ?", 1)).
-		Error
+		Update("download_count", gorm.Expr("download_count + ?", 1))
+
+	if result.Error != nil {
+		log.Printf("Error during update: %v", result.Error)
+		return fmt.Errorf("failed to increment download count: %w", result.Error)
+	}
+
+	log.Printf("Update query executed, affected rows: %d", result.RowsAffected)
+
+	if result.RowsAffected == 0 {
+		log.Printf("No rows affected for share ID %d", shareID)
+		return fmt.Errorf("no share found with ID %d", shareID)
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	log.Printf("Successfully committed download count increment for share ID %d", shareID)
+	return nil
 }

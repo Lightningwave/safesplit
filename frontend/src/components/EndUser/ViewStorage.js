@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const ViewStorage = () => {
     const [storageInfo, setStorageInfo] = useState(null);
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchStorageInfo();
@@ -37,6 +39,10 @@ const ViewStorage = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleUpgrade = () => {
+        navigate('/billing?upgrade=true');
     };
 
     const formatStorageSize = (bytes) => {
@@ -123,7 +129,9 @@ const ViewStorage = () => {
                         <p className="text-blue-700 text-sm">
                             Upgrade to Premium for 50GB storage and additional features!
                         </p>
-                        <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors w-full">
+                        <button 
+                            onClick={handleUpgrade}
+                            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors w-full">
                             Upgrade to Premium
                         </button>
                     </div>
