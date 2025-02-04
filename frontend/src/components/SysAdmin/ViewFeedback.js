@@ -19,7 +19,7 @@ const ViewFeedback = () => {
     const fetchFeedbacks = async (page, status) => {
         try {
             const token = localStorage.getItem('token');
-            let url = `http://localhost:8080/api/system/feedback?page=${page}&page_size=10`;
+            let url = `/api/system/feedback?page=${page}&page_size=10`;
             if (status && status !== 'all') {
                 url += `&status=${status}`;
             }
@@ -47,7 +47,7 @@ const ViewFeedback = () => {
     const fetchStats = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/system/feedback/stats', {
+            const response = await fetch('/api/system/feedback/stats', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -67,7 +67,7 @@ const ViewFeedback = () => {
     const updateStatus = async (feedbackId, newStatus) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8080/api/system/feedback/${feedbackId}/status`, {
+            const response = await fetch(`/api/system/feedback/${feedbackId}/status`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

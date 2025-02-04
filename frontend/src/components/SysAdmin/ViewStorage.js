@@ -11,7 +11,7 @@ const ViewStorage = () => {
 
   const fetchStorageStats = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/system/storage/stats', {
+      const response = await fetch('/api/system/storage/stats', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

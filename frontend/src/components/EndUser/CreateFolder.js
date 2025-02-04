@@ -13,7 +13,7 @@ const CreateFolder = ({ isOpen, onClose, currentFolder, onFolderCreated }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/folders', {
+            const response = await fetch('/api/folders', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

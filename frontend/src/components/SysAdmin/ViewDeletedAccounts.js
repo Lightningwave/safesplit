@@ -11,7 +11,7 @@ const ViewDeletedAccounts = () => {
 
   const fetchDeletedUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/system/users/deleted', {
+      const response = await fetch('/api/system/users/deleted', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -32,7 +32,7 @@ const ViewDeletedAccounts = () => {
     setError(null);
     try {
       // Updated endpoint to match the backend route
-      const response = await fetch(`http://localhost:8080/api/system/users/deleted/${userId}/restore`, {
+      const response = await fetch(`/api/system/users/deleted/${userId}/restore`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

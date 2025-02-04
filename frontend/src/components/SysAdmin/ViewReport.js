@@ -22,7 +22,7 @@ const ViewReport = () => {
     const fetchReports = async (page, status) => {
         try {
             const token = localStorage.getItem('token');
-            let url = `http://localhost:8080/api/system/reports?page=${page}&page_size=10`;
+            let url = `/api/system/reports?page=${page}&page_size=10`;
             if (status && status !== 'all') {
                 url += `&status=${status}`;
             }
@@ -50,7 +50,7 @@ const ViewReport = () => {
     const fetchStats = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/system/reports/stats', {
+            const response = await fetch('/api/system/reports/stats', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -73,7 +73,7 @@ const ViewReport = () => {
             if (!comment) return;
 
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8080/api/system/reports/${reportId}/status`, {
+            const response = await fetch(`/api/system/reports/${reportId}/status`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

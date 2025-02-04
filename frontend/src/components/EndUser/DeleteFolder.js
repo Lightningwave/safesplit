@@ -13,7 +13,7 @@ const DeleteFolder = ({ isOpen, onClose, folder, onFolderDeleted }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8080/api/folders/${folder.id}`, {
+            const response = await fetch(`/api/folders/${folder.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,

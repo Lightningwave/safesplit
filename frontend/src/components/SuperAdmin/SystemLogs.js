@@ -21,7 +21,7 @@ const SystemLogs = () => {
                 if (value) queryParams.append(key, value);
             });
 
-            const response = await fetch(`http://localhost:8080/api/admin/system-logs?${queryParams}`, {
+            const response = await fetch(`/api/admin/system-logs?${queryParams}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }

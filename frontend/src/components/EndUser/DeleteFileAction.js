@@ -12,12 +12,12 @@ const DeleteFileAction = ({ file, selectedFiles = [] }) => {
             const token = localStorage.getItem('token');
             
             if (files.length === 1) {
-                await fetch(`http://localhost:8080/api/files/${files[0].id}`, {
+                await fetch(`/api/files/${files[0].id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` },
                 });
             } else {
-                await fetch('http://localhost:8080/api/files/mass-delete', {
+                await fetch('/api/files/mass-delete', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,

@@ -11,7 +11,7 @@ const UpdateUserPermissions = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/system/users', {
+      const response = await fetch('/api/system/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -49,7 +49,7 @@ const UpdateUserPermissions = () => {
         throw new Error('User not found');
       }
   
-      const response = await fetch(`http://localhost:8080/api/system/users/${userId}`, {
+      const response = await fetch(`/api/system/users/${userId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

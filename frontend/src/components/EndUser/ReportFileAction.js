@@ -22,7 +22,7 @@ const ReportFileAction = ({ file }) => {
                 throw new Error('Please log in to report files');
             }
 
-            const response = await fetch(`http://localhost:8080/api/reports/file/${file.id}`, {
+            const response = await fetch(`/api/reports/file/${file.id}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

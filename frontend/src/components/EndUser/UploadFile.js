@@ -25,7 +25,7 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
     const fetchEncryptionOptions = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/files/encryption/options', {
+            const response = await fetch('/api/files/encryption/options', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -101,7 +101,7 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                 folderId: currentFolder?.id || 'root'
             });
 
-            const response = await fetch('http://localhost:8080/api/files/upload', {
+            const response = await fetch('/api/files/upload', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

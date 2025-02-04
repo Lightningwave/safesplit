@@ -47,8 +47,8 @@ const ShareFileAction = ({ file, user }) => {
             console.log('Sending share data:', shareData);
     
             const endpoint = isPremium
-                ? `http://localhost:8080/api/premium/shares/files/${file.id}`
-                : `http://localhost:8080/api/files/${file.id}/share`;
+                ? `/api/premium/shares/files/${file.id}`
+                : `/api/files/${file.id}/share`;
     
             const response = await fetch(endpoint, {
                 method: 'POST',

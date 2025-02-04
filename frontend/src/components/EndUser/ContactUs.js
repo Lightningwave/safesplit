@@ -58,7 +58,7 @@ const FeedbackForm = () => {
                 throw new Error('Please log in to submit feedback');
             }
 
-            const response = await fetch('http://localhost:8080/api/feedback', {
+            const response = await fetch('/api/feedback', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

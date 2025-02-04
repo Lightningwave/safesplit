@@ -69,7 +69,7 @@ export default function PasswordReset() {
       throw new Error('Not authenticated. Please login again.');
     }
  
-    const response = await fetch('http://localhost:8080/api/reset-password', {
+    const response = await fetch('/api/reset-password', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

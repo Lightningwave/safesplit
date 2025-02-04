@@ -24,7 +24,7 @@ const ViewUserAccounts = ({ selectedType }) => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8080/api/system/users', {
+      const response = await fetch('/api/system/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

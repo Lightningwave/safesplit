@@ -16,7 +16,7 @@ const TrashBin = ({ user }) => {
         setError(null);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/premium/recovery/files', {
+            const response = await fetch('/api/premium/recovery/files', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -47,7 +47,7 @@ const TrashBin = ({ user }) => {
         setRecoveryStatus(prev => ({ ...prev, [fileId]: 'recovering' }));
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8080/api/premium/recovery/files/${fileId}`, {
+            const response = await fetch(`/api/premium/recovery/files/${fileId}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

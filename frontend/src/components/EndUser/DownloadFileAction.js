@@ -9,7 +9,7 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
 
             // If multiple files selected, get download status first
             if (selectedFiles.length > 0) {
-                const statusResponse = await fetch('http://localhost:8080/api/files/mass-download', {
+                const statusResponse = await fetch('/api/files/mass-download', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -30,7 +30,7 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
                 // Download each available file
                 for (const fileStatus of availableFiles) {
                     try {
-                        const response = await fetch(`http://localhost:8080/api/files/mass-download/${fileStatus.file_id}`, {
+                        const response = await fetch(`/api/files/mass-download/${fileStatus.file_id}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                             },
@@ -53,7 +53,7 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
                 }
             } else {
                 // Single file download
-                const response = await fetch(`http://localhost:8080/api/files/${file.id}/download`, {
+                const response = await fetch(`/api/files/${file.id}/download`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
                     },

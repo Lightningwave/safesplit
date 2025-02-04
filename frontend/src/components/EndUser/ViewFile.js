@@ -45,7 +45,7 @@ const ViewFile = ({
                 return;
             }
 
-            let url = 'http://localhost:8080/api/files';
+            let url = '/api/files';
             if (currentFolder) {
                 url += `?folder_id=${currentFolder.id}`;
             }

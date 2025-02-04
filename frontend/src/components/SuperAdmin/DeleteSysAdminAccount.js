@@ -11,7 +11,7 @@ const DeleteSysAdminAccount = ({ admin, onSuccess }) => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:8080/api/admin/sysadmins/${admin.id}`, {
+      const response = await fetch(`/api/admin/sysadmins/${admin.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

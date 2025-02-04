@@ -12,7 +12,7 @@ const ViewSysAdminAccount = () => {
 
   const fetchSysAdmins = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/admin/sysadmins', {
+      const response = await fetch('/api/admin/sysadmins', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

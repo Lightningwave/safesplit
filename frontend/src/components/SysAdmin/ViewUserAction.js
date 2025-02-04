@@ -14,7 +14,7 @@ const ViewUserAction = ({ isOpen, onClose, userId }) => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:8080/api/system/users/${userId}`, {
+      const response = await fetch(`/api/system/users/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

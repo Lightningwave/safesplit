@@ -32,7 +32,7 @@ const CreateSysAdminForm = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/admin/create-sysadmin', {
+      const response = await fetch('/api/admin/create-sysadmin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

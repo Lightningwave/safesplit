@@ -19,8 +19,8 @@ const SharedFileAccess = () => {
         try {
             // Use different endpoints based on share type
             const endpoint = isPremiumShare
-                ? `http://localhost:8080/api/premium/shares/${shareLink}`
-                : `http://localhost:8080/api/files/share/${shareLink}`;
+                ? `/api/premium/shares/${shareLink}`
+                : `/api/files/share/${shareLink}`;
 
             const response = await fetch(endpoint, {
                 method: 'POST',

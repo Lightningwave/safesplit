@@ -12,7 +12,7 @@ const TwoFactorAuthentication = () => {
 
   const fetchTwoFactorStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/2fa/status', {
+      const response = await fetch('/api/2fa/status', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -30,7 +30,7 @@ const TwoFactorAuthentication = () => {
     setMessage('');
 
     try {
-      const response = await fetch(`http://localhost:8080/api/2fa/${isEnabled ? 'disable' : 'enable'}`, {
+      const response = await fetch(`/api/2fa/${isEnabled ? 'disable' : 'enable'}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

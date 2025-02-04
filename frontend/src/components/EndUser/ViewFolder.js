@@ -21,8 +21,8 @@ const ViewFolder = ({
             setLoading(true);
             const token = localStorage.getItem('token');
             const endpoint = currentFolder
-                ? `http://localhost:8080/api/folders/${currentFolder.id}`
-                : 'http://localhost:8080/api/folders';
+                ? `/api/folders/${currentFolder.id}`
+                : '/api/folders';
 
             const response = await fetch(endpoint, {
                 headers: {

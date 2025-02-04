@@ -16,7 +16,7 @@ const ArchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
             const token = localStorage.getItem('token');
             
             if (files.length === 1) {
-                const response = await fetch(`http://localhost:8080/api/files/${files[0].id}/archive`, {
+                const response = await fetch(`/api/files/${files[0].id}/archive`, {
                     method: 'PUT',
                     headers: { 
                         'Authorization': `Bearer ${token}`,
@@ -26,7 +26,7 @@ const ArchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
                 
                 if (!response.ok) throw new Error('Failed to archive file');
             } else {
-                const response = await fetch('http://localhost:8080/api/files/mass-archive', {
+                const response = await fetch('/api/files/mass-archive', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,

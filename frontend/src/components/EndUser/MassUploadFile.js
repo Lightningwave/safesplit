@@ -27,7 +27,7 @@ const MassUploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
     const fetchEncryptionOptions = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/files/encryption/options', {
+            const response = await fetch('/api/files/encryption/options', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -96,7 +96,7 @@ const MassUploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                 formData.append('folder_id', currentFolder.id);
             }
 
-            const response = await fetch('http://localhost:8080/api/files/mass-upload', {
+            const response = await fetch('/api/files/mass-upload', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

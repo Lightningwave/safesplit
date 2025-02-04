@@ -51,7 +51,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
         setError(null);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/folders', {
+            const response = await fetch('/api/folders', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -88,7 +88,7 @@ const EndUserDashboard = ({ user, onLogout }) => {
         setError(null);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8080/api/folders/${folderId}`, {
+            const response = await fetch(`/api/folders/${folderId}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,

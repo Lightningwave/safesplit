@@ -20,7 +20,7 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
     const fetchUserData = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/me', {
+            const response = await fetch('/api/me', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -43,7 +43,7 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
         
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8080/api/payment/cancel', {
+            const response = await fetch('/api/payment/cancel', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`

@@ -79,7 +79,7 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
       validateCard();
       const token = localStorage.getItem('token');
 
-      const paymentResponse = await fetch('http://localhost:8080/api/payment/upgrade', {
+      const paymentResponse = await fetch('/api/payment/upgrade', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

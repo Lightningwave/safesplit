@@ -18,7 +18,7 @@ const DeleteUserAction = ({
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:8080/api/system/users/${userToDelete.id}`, {
+      const response = await fetch(`/api/system/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
