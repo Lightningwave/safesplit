@@ -13,16 +13,15 @@ function HomePage() {
   return (
     <div className="flex flex-col min-h-screen">
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48">
+      <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48">
           <div className="container mx-auto max-w-[1200px] px-4">
             <div className="flex flex-col items-center space-y-8 text-center">
               <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight">
-                Secure File Sharing with Shamir's Secret
+                Military-Grade Security with Distributed Storage
               </h1>
               <p className="max-w-[700px] text-xl text-gray-600">
-                Split your files into secure shares, share them safely, and recover them with ease. 
-                Safesplit uses Shamir's Secret Sharing for unparalleled security.
+                Protect your files with AES-256-GCM encryption, secured by Shamir's Secret Sharing 
+                for key management and Reed–Solomon code for reliable distributed storage.
               </p>
               <div className="w-full max-w-sm space-y-4">
                 <form onSubmit={handleGetStarted} className="flex space-x-2">
@@ -55,24 +54,27 @@ function HomePage() {
             </h2>
             <div className="grid md:grid-cols-3 gap-12">
               <div className="flex flex-col items-center text-center space-y-4">
-                <Upload className="h-6 w-6" />
-                <h3 className="text-xl font-bold">Upload & Split</h3>
-                <p className="text-gray-600">
-                  Upload your file and split it into multiple secure shares using Shamir's Secret Sharing.
-                </p>
-              </div>
-              <div className="flex flex-col items-center text-center space-y-4">
                 <Lock className="h-6 w-6" />
-                <h3 className="text-xl font-bold">Distribute Shares</h3>
+                <h3 className="text-xl font-bold">AES-256-GCM Encryption</h3>
                 <p className="text-gray-600">
-                  Safely distribute the shares to trusted parties or store them in different locations.
+                  Your files are secured using AES-256-GCM encryption, providing 
+                  military-grade security with authenticated encryption.
                 </p>
               </div>
               <div className="flex flex-col items-center text-center space-y-4">
                 <Shield className="h-6 w-6" />
-                <h3 className="text-xl font-bold">Recover Securely</h3>
+                <h3 className="text-xl font-bold">Distributed Key Management</h3>
                 <p className="text-gray-600">
-                  Reconstruct your original file by combining a threshold number of shares.
+                  Encryption keys are protected using Shamir's Secret Sharing, 
+                  ensuring secure and distributed key management.
+                </p>
+              </div>
+              <div className="flex flex-col items-center text-center space-y-4">
+                <Upload className="h-6 w-6" />
+                <h3 className="text-xl font-bold">Redundant Storage</h3>
+                <p className="text-gray-600">
+                  Encrypted data is split using Reed–Solomon code and distributed 
+                  across multiple storage nodes for reliability.
                 </p>
               </div>
             </div>
@@ -134,7 +136,7 @@ function HomePage() {
                 </li>
                 <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Data Encryption</span>
+                    <span>Data Encryption(AES-256-GCM)</span>
                 </li>
                 <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
@@ -205,7 +207,7 @@ function HomePage() {
                 </li>
                 <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
-                    <span>Data Encryption</span>
+                    <span>Data Encryption(AES-256-GCM,ChaCha20,TwoFish)</span>
                 </li>
                 <li className="flex items-center">
                     <Check className="h-5 w-5 mr-3 text-green-500" />
@@ -273,7 +275,7 @@ function HomePage() {
       {/* Footer */}
       <footer className="py-6 border-t">
         <div className="container mx-auto max-w-[1200px] px-4 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-gray-500">© 2024 Safesplit. All rights reserved.</p>
+          <p className="text-sm text-gray-500">© 2025 Safesplit. All rights reserved.</p>
           <div className="flex gap-6 mt-4 sm:mt-0">
             <Link to="#" className="text-sm text-gray-500 hover:text-gray-600">Terms of Service</Link>
             <Link to="#" className="text-sm text-gray-500 hover:text-gray-600">Privacy Policy</Link>

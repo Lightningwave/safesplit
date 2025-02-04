@@ -8,42 +8,42 @@ function AboutPage() {
       name: "HO RONG HUI",
       role: "Leader / Backend Developer",
       bio: "Guides the team to achieve project goals. Develops server-side systems and creates essential documentation.",
-      image: "/sample 1.png",
+      image: "/sample1.png",
       github: "https://github.com/username1"
     },
     {
       name: "CHEN XIAOJUAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample 5.png",
+      image: "/sample5.png",
       github: "https://github.com/username2"
     },
     {
       name: "LAI NIM LOONG RYAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample 3.png",
+      image: "/sample3.png",
       github: "https://github.com/username3"
     },
     {
       name: "PANG WAI PIN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
-      image: "/sample 4.png",
+      image: "/sample4.png",
       github: "https://github.com/username4"
     },
     {
       name: "VAN LE NGUYEN",
       role: "Full Stack Developer",
       bio: "Creates and updates essential documentation. Develops both front-end and backend components of the website.",
-      image: "/sample 2.png",
+      image: "/sample2.png",
       github: "https://github.com/username5"
     },
     {
       name: "ZENG LIHONG",
       role: "Backend Developer",
       bio: "Creates and updates essential documentation. Develops server-side systems.",
-      image: "/sample 6.png",
+      image: "/sample6.png",
       github: "https://github.com/username6"
     }
   ];
@@ -138,7 +138,7 @@ function AboutPage() {
       {/* Footer */}
       <footer className="py-6 border-t">
         <div className="container mx-auto max-w-[1200px] px-4 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-gray-500">© 2024 Safesplit. All rights reserved.</p>
+          <p className="text-sm text-gray-500">© 2025 Safesplit. All rights reserved.</p>
           <div className="flex gap-6 mt-4 sm:mt-0">
             <Link to="#" className="text-sm text-gray-500 hover:text-gray-600">Terms of Service</Link>
             <Link to="#" className="text-sm text-gray-500 hover:text-gray-600">Privacy Policy</Link>
