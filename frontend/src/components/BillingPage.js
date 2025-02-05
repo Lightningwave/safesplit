@@ -78,7 +78,7 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
     try {
       validateCard();
       const token = localStorage.getItem('token');
-
+  
       const paymentResponse = await fetch('/api/payment/upgrade', {
         method: 'POST',
         headers: {
@@ -98,14 +98,23 @@ const BillingPage = ({ user, onUpgradeSuccess }) => {
           countryCode: billingInfo.countryCode
         })
       });
-
+  
       if (!paymentResponse.ok) {
         const errorData = await paymentResponse.json();
         throw new Error(errorData.error || 'Payment processing failed');
       }
-
+  
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+      const updatedUser = {
+        ...currentUser,
+        role: 'premium_user',
+        subscription_status: 'premium'
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+  
       if (onUpgradeSuccess) onUpgradeSuccess();
-      navigate('/premium-dashboard?upgraded=true');
+      
+      window.location.href = '/premium-dashboard?upgraded=true';
     } catch (err) {
       setError(err.message);
     } finally {
