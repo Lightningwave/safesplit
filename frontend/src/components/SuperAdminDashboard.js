@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, ChevronDown, ChevronRight, MoreVertical, Settings, FileText, UserPlus } from 'lucide-react';
+import { Users, ChevronDown, ChevronRight, MoreVertical, FileText, UserPlus } from 'lucide-react';
 import CreateSysAdminForm from './SuperAdmin/CreateSysAdminForm';
 import ViewSysAdminAccount from './SuperAdmin/ViewSysAdminAccount';
 import SystemLogs from './SuperAdmin/SystemLogs';
@@ -149,23 +149,10 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
                 System Logs
               </button>
             </li>
-
-            <li>
-              <button 
-                onClick={() => setSelectedSection('Settings')}
-                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-600
-                  ${selectedSection === 'Settings' ? 'bg-gray-600' : ''}`}
-              >
-                Settings
-              </button>
-            </li>
           </ul>
         </nav>
 
         <div className="border-t border-gray-600 p-4">
-          <button className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded transition-colors duration-200">
-            Get Help
-          </button>
           <button 
             onClick={onLogout}
             className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded transition-colors duration-200"

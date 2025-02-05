@@ -12,6 +12,12 @@ type LoginController struct {
 	userModel *models.UserModel
 }
 
+type LoginRequest struct {
+	Email         string `json:"email" binding:"required"`
+	Password      string `json:"password" binding:"required"`
+	TwoFactorCode string `json:"two_factor_code"`
+}
+
 func NewLoginController(userModel *models.UserModel) *LoginController {
 	return &LoginController{
 		userModel: userModel,
@@ -19,24 +25,44 @@ func NewLoginController(userModel *models.UserModel) *LoginController {
 }
 
 func (c *LoginController) Login(ctx *gin.Context) {
-	var loginReq struct {
-		Email    string `json:"email" binding:"required"`
-		Password string `json:"password" binding:"required"`
-	}
-
+	var loginReq LoginRequest
 	if err := ctx.ShouldBindJSON(&loginReq); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Authenticate super admin
+	// First authenticate super admin credentials
 	user, err := c.userModel.AuthenticateSuperAdmin(loginReq.Email, loginReq.Password)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid super admin credentials"})
 		return
 	}
 
-	// Generate token
+	// Always require 2FA for super admin
+	if loginReq.TwoFactorCode == "" {
+		// Initiate 2FA if code not provided
+		if err := c.userModel.InitiateEmailTwoFactor(user.ID); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to send 2FA code",
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusAccepted, gin.H{
+			"message":      "2FA required",
+			"requires_2fa": true,
+			"user_id":      user.ID,
+		})
+		return
+	}
+
+	// Verify 2FA code
+	if err := c.userModel.VerifyEmailTwoFactor(user.ID, loginReq.TwoFactorCode); err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA code"})
+		return
+	}
+
+	// Generate token after successful 2FA
 	token, err := config.GenerateToken(user.ID, user.Role)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
