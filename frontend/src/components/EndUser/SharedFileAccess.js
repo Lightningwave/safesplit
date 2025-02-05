@@ -34,14 +34,22 @@ const SharedFileAccess = () => {
                 throw new Error(errorData.error || 'Failed to access file');
             }
     
+            // Get filename from Content-Disposition header
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'downloaded-file';
+            if (contentDisposition) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                if (matches != null && matches[1]) {
+                    filename = matches[1].replace(/['"]/g, '');
+                }
+            }
+    
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
     
-            
             if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
                 window.location.href = url;
             } else {
-                // Desktop approach
                 const link = document.createElement('a');
                 link.href = url;
                 link.download = filename;
@@ -51,7 +59,6 @@ const SharedFileAccess = () => {
             }
             
             window.URL.revokeObjectURL(url);
-    
         } catch (error) {
             console.error('Download error:', error);
             setError(error.message);
