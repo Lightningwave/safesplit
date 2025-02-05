@@ -15,13 +15,12 @@ const SharedFileAccess = () => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-
+    
         try {
-            // Use different endpoints based on share type
             const endpoint = isPremiumShare
                 ? `/api/premium/shares/${shareLink}`
                 : `/api/files/share/${shareLink}`;
-
+    
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -29,36 +28,30 @@ const SharedFileAccess = () => {
                 },
                 body: JSON.stringify({ password }),
             });
-
+    
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to access file');
             }
-
-            // Extract filename from Content-Disposition header
-            const disposition = response.headers.get('Content-Disposition');
-            let filename = 'download';
-            if (disposition) {
-                const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                if (matches && matches[1]) {
-                    filename = matches[1].replace(/['"]/g, '');
-                }
-            }
-
+    
             const blob = await response.blob();
-
-            // Create download link
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = decodeURIComponent(filename);
-            document.body.appendChild(link);
-            link.click();
+            const url = window.URL.createObjectURL(blob);
+    
             
-            // Cleanup
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-
+            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                window.location.href = url;
+            } else {
+                // Desktop approach
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            
+            window.URL.revokeObjectURL(url);
+    
         } catch (error) {
             console.error('Download error:', error);
             setError(error.message);

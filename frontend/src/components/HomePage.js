@@ -17,7 +17,7 @@ function HomePage() {
           <div className="container mx-auto max-w-[1200px] px-4">
             <div className="flex flex-col items-center space-y-8 text-center">
               <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight">
-                Military-Grade Security with Distributed Storage
+               Enterprise-Grade Security with Distributed Storage
               </h1>
               <p className="max-w-[700px] text-xl text-gray-600">
                 Protect your files with AES-256-GCM encryption, secured by Shamir's Secret Sharing 
@@ -58,7 +58,7 @@ function HomePage() {
                 <h3 className="text-xl font-bold">AES-256-GCM Encryption</h3>
                 <p className="text-gray-600">
                   Your files are secured using AES-256-GCM encryption, providing 
-                  military-grade security with authenticated encryption.
+                  enterprise-grade security with authenticated encryption.
                 </p>
               </div>
               <div className="flex flex-col items-center text-center space-y-4">
@@ -99,7 +99,7 @@ function HomePage() {
           </div>
         </div>
         <p className="text-center mt-8 text-gray-600 max-w-2xl mx-auto">
-          Watch our demo to see how Safesplit makes file sharing secure and simple using Shamir's Secret Sharing algorithm.
+          Watch our demo to see how Safesplit makes file sharing secure and simple using Shamir's Secret Sharing and Reed-Solomon algorithms.
         </p>
       </div>
     </section>
