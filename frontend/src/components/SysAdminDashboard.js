@@ -4,7 +4,6 @@ import {
   ChevronDown, 
   ChevronRight, 
   HardDrive,
-  Settings
 } from 'lucide-react';
 import ViewUserAccounts from './SysAdmin/ViewUserAccounts';
 import ViewStorage from './SysAdmin/ViewStorage';
@@ -105,8 +104,6 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         return <ViewFeedback feedbackType="feedback" />;
       case 'Reports':
         return <ViewReport feedbackType="suspicious_activity" />;
-      case 'Settings':
-        return <div>Settings</div>;
       default:
         return renderDashboardContent();
     }
@@ -220,30 +217,17 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                 View Storage
               </button>
             </li>
-
-            <li>
-              <button 
-                onClick={() => setSelectedSection('Settings')}
-                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
-                  ${selectedSection === 'Settings' ? 'bg-gray-800' : ''}`}
-              >
-                Settings
-              </button>
-            </li>
           </ul>
         </nav>
 
         <div className="border-t border-gray-800 p-4">
-          <button className="block w-full text-left px-4 py-2 hover:bg-gray-800 rounded transition-colors duration-200">
-            Get Help
-          </button>
-          <button 
-            onClick={onLogout}
-            className="block w-full text-left px-4 py-2 hover:bg-gray-800 rounded transition-colors duration-200"
-          >
-            Logout
-          </button>
-        </div>
+      <button 
+        onClick={onLogout}
+        className="block w-full text-left px-4 py-2 hover:bg-gray-800 rounded transition-colors duration-200"
+      >
+        Logout
+      </button>
+    </div>
       </div>
 
       {/* Main Content */}
