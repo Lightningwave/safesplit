@@ -69,9 +69,9 @@ const ShareFileAction = ({ file, user }) => {
             }
 
             const { data } = await response.json();
-            const baseUrl = isPremium 
-                ? `https://safesplit.xyz/premium/share/`
-                : `https://safesplit.xyz/share/`;
+            const baseUrl = window.location.origin + (isPremium 
+                ? `/premium/share/`
+                : `/share/`);
             setShareLink(baseUrl + data.share_link);
         } catch (error) {
             setError(error.message);
