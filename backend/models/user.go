@@ -168,7 +168,10 @@ func (m *UserModel) Authenticate(email, password string) (*User, error) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Reset failed attempts and update login time
+	if user.Role == RoleSysAdmin || user.TwoFactorEnabled {
+		return &user, nil
+	}
+
 	return m.handleSuccessfulLogin(&user)
 }
 
@@ -407,15 +410,30 @@ func (m *UserModel) CreateSysAdmin(creator *User, newAdmin *User) (*User, error)
 		return nil, errors.New("unauthorized: only super admins can create system administrators")
 	}
 
-	// Ensure the new user is created as a sys_admin
-	newAdmin.Role = RoleSysAdmin
+	err := m.db.Transaction(func(tx *gorm.DB) error {
+		newAdmin.Role = RoleSysAdmin
 
-	// Create the new admin user
-	if err := m.db.Create(newAdmin).Error; err != nil {
-		return nil, fmt.Errorf("failed to create system administrator: %v", err)
+		if err := tx.Create(newAdmin).Error; err != nil {
+			return fmt.Errorf("failed to create system administrator: %v", err)
+		}
+
+		if err := tx.Model(newAdmin).Update("two_factor_enabled", true).Error; err != nil {
+			return fmt.Errorf("failed to enable 2FA: %v", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	return newAdmin, nil
+	var createdAdmin User
+	if err := m.db.First(&createdAdmin, newAdmin.ID).Error; err != nil {
+		return nil, fmt.Errorf("failed to load created admin: %v", err)
+	}
+
+	return &createdAdmin, nil
 }
 
 // View Sys admin account
@@ -826,7 +844,7 @@ func (m *UserModel) ResetPasswordWithFragments(
 				// Decrypt fragment with current decrypted master key
 				decryptedFragment, err := services.DecryptMasterKey(
 					fragment.Data,
-					userMasterKey, 
+					userMasterKey,
 					fragment.EncryptionNonce,
 				)
 				if err != nil {
@@ -842,10 +860,10 @@ func (m *UserModel) ResetPasswordWithFragments(
 					return fmt.Errorf("failed to generate nonce for fragment: %w", err)
 				}
 
-				// Re-encrypt with same decrypted master key 
+				// Re-encrypt with same decrypted master key
 				newEncryptedFragment, err := services.EncryptMasterKey(
 					decryptedFragment,
-					userMasterKey, 
+					userMasterKey,
 					newFragmentNonce,
 				)
 				if err != nil {
@@ -930,7 +948,7 @@ func (m *UserModel) updateKeyFragments(
 			// Decrypt fragment using old master key
 			decryptedFragment, err := services.DecryptMasterKey(
 				fragment.Data,
-				oldMasterKey, 
+				oldMasterKey,
 				fragment.EncryptionNonce,
 			)
 			if err != nil {
@@ -949,7 +967,7 @@ func (m *UserModel) updateKeyFragments(
 			// Re-encrypt fragment with new decrypted master key
 			newEncryptedFragment, err := services.EncryptMasterKey(
 				decryptedFragment,
-				decryptedMasterKey, 
+				decryptedMasterKey,
 				newNonce,
 			)
 			if err != nil {
