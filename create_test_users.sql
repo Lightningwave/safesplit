@@ -5,7 +5,7 @@ CREATE PROCEDURE create_test_data()
 BEGIN
     -- Clear existing data
     SET FOREIGN_KEY_CHECKS = 0;
-    TRUNCATE TABLE feedback;
+    TRUNCATE TABLE feedbacks;
     TRUNCATE TABLE user_subscriptions;
     TRUNCATE TABLE subscription_plans;
     TRUNCATE TABLE share_access_logs;
@@ -14,7 +14,7 @@ BEGIN
     TRUNCATE TABLE key_fragments;
     TRUNCATE TABLE files;
     TRUNCATE TABLE folders;
-    TRUNCATE TABLE key_rotation_history;
+    TRUNCATE TABLE key_rotation_histories;
     TRUNCATE TABLE password_history;
     TRUNCATE TABLE server_master_keys;
     TRUNCATE TABLE users;

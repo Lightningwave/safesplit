@@ -57,32 +57,33 @@ func validateConfig(config SMTPConfig) error {
 }
 
 func (s *SMTPEmailService) connect() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+    s.mu.Lock()
+    defer s.mu.Unlock()
 
-	// Establish a plaintext connection first
-	conn, err := smtp.Dial(fmt.Sprintf("%s:%d", s.config.Host, s.config.Port))
-	if err != nil {
-		return fmt.Errorf("failed to establish SMTP connection: %w", err)
-	}
+    tlsConfig := &tls.Config{
+        ServerName: s.config.Host,
+        MinVersion: tls.VersionTLS12,
+    }
 
-	// Send the STARTTLS command to upgrade the connection to TLS
-	if err := conn.StartTLS(&tls.Config{
-		ServerName: s.config.Host,
-		MinVersion: tls.VersionTLS12,
-	}); err != nil {
-		conn.Close()
-		return fmt.Errorf("failed to upgrade to TLS: %w", err)
-	}
+    conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", s.config.Host, s.config.Port), tlsConfig)
+    if err != nil {
+        return fmt.Errorf("failed to establish TLS connection: %w", err)
+    }
 
-	// Authenticate with the SMTP server
-	if err := conn.Auth(s.auth); err != nil {
-		conn.Close()
-		return fmt.Errorf("authentication failed: %w", err)
-	}
+    client, err := smtp.NewClient(conn, s.config.Host)
+    if err != nil {
+        conn.Close()
+        return fmt.Errorf("failed to create SMTP client: %w", err)
+    }
 
-	s.client = conn
-	return nil
+    // Authenticate
+    if err := client.Auth(s.auth); err != nil {
+        client.Close()
+        return fmt.Errorf("authentication failed: %w", err)
+    }
+
+    s.client = client
+    return nil
 }
 func (s *SMTPEmailService) SendEmail(to, subject, body string) error {
 	if err := s.connect(); err != nil {
