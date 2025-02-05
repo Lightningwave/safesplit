@@ -5,7 +5,7 @@ CREATE PROCEDURE create_test_data()
 BEGIN
     -- Clear existing data
     SET FOREIGN_KEY_CHECKS = 0;
-    TRUNCATE TABLE feedback;
+    TRUNCATE TABLE feedbacks;
     TRUNCATE TABLE user_subscriptions;
     TRUNCATE TABLE subscription_plans;
     TRUNCATE TABLE share_access_logs;
@@ -14,7 +14,7 @@ BEGIN
     TRUNCATE TABLE key_fragments;
     TRUNCATE TABLE files;
     TRUNCATE TABLE folders;
-    TRUNCATE TABLE key_rotation_history;
+    TRUNCATE TABLE key_rotation_histories;
     TRUNCATE TABLE password_history;
     TRUNCATE TABLE server_master_keys;
     TRUNCATE TABLE users;
@@ -71,7 +71,7 @@ BEGIN
     ),
     (
         'sys_admin',
-        'sys_admin@example.com',
+        'sys_admin@safesplit.xyz',
         '$2a$10$b.WsKp9GR.8pcdQjxMggGeCtTL7nvuc1oW2LfZu0FrM5SLv3dhkge',
         UNHEX('6293E61742A9A26D16ABC91564FE26157923B855F58535AD73E9720C60F94C22'), -- salt
         UNHEX('6293E61742A9A26D16ABC91564FE2615'),                                 -- nonce
@@ -85,7 +85,7 @@ BEGIN
     ),
     (
         'super_admin',
-        'super_admin@example.com',
+        'super_admin@safesplit.xyz',
         '$2a$10$b.WsKp9GR.8pcdQjxMggGeCtTL7nvuc1oW2LfZu0FrM5SLv3dhkge',
         UNHEX('B5F83100C6B4F1FF3865A9FB3A32CBB1EF4770A734026D0AE0451737109750C7'), -- salt
         UNHEX('B5F83100C6B4F1FF3865A9FB3A32CBB1'),                                 -- nonce
