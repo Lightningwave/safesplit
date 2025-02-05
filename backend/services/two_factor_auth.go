@@ -109,9 +109,9 @@ func (s *TwoFactorAuthService) SendTwoFactorToken(userID uint, email string) err
 	body := fmt.Sprintf(`Hello,
 
 Your two-factor authentication code is:
-**%s**
+%s
 
-This code will expire in **10 minutes**. Please use it to complete your login process.
+This code will expire in 10 minutes. Please use it to complete your login process.
 
 If you didn't request this code, please ignore this email or contact our support team immediately.
 
