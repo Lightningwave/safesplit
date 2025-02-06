@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { File, Loader } from 'lucide-react';
+import { File, Loader, ArrowUp, ArrowDown } from 'lucide-react';
 import FileActions from './FileActions';
 
 const ViewFile = ({ 
@@ -15,6 +15,8 @@ const ViewFile = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedFiles, setSelectedFiles] = useState(new Set());
+    const [sortType, setSortType] = useState('date');               // State for sorting type
+    const [sortOrder, setSortOrder] = useState('desc');             // State for sorting order (asc, desc)
 
     const fetchFiles = async () => {
         try {
@@ -151,10 +153,49 @@ const ViewFile = ({
             filteredFiles = filteredFiles.filter(file => file.is_archived === false);
         }
     }
-    
 
+    // Sorting Logic
+    const sortFiles = (files) => {
+        if (sortType === 'date') {  // Last Modified (date)
+            return files.sort((a, b) => 
+                sortOrder === 'desc' ? new Date(b.created_at) - new Date(a.created_at) : new Date(a.created_at) - new Date(b.created_at)
+            );
+        } else if (sortType === 'name') {   // Name (string)      
+            return files.sort((a, b) => {
+                const nameA = a.original_name || a.name;
+                const nameB = b.original_name || b.name;
+                return sortOrder === 'desc' ? nameB.localeCompare(nameA) : nameA.localeCompare(nameB);
+            });
+        } else if (sortType === 'size') {   // Size (raw size values)
+            return files.sort((a, b) => {
+                return sortOrder === 'desc' ? b.size - a.size : a.size - b.size;
+            });
+        } else if (sortType === 'location') {   // Location (string)
+            return files.sort((a, b) => {
+                const locationA = a.folder_name || ''; // Assuming folder_name is the location
+                const locationB = b.folder_name || '';
+                return sortOrder === 'desc' ? locationB.localeCompare(locationA) : locationA.localeCompare(locationB);
+            });
+        }
+    }
+    // Apply sorting
+    const sortedFiles = sortFiles(filteredFiles);
+
+    // Checkbox & Action button to not show for RECENTS SECTION
     const showCheckboxes = !showRecentsOnly;
     const showActions = !showRecentsOnly;
+
+    // Change sorting type (name, size, location, date)
+    const handleSortChange = (event) => {
+        const newSortType = event.target.value;
+        setSortType(newSortType);
+        setSortOrder('desc'); // Default to descending when changing sorting type
+    };
+
+    // Change the sorting order (asc,desc)
+    const toggleSortOrder = () => {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    };
 
     if (!user) {
         return (
@@ -181,6 +222,20 @@ const ViewFile = ({
                 </div>
             ) : (
                 <>
+                    {/* SORT BY DATE/NAME/SIZE - DROPDOWN SELECTION */}
+                    <div className="flex justify-end items-center p-2 bg-gray-50">                
+                        <select 
+                            onChange={handleSortChange} 
+                            className="border rounded p-2 text-sm"
+                        >
+                            <option value="date">Sort by Date</option>
+                            <option value="name">Sort by Name</option>
+                            <option value="size">Sort by Size</option>
+                            <option value="location">Sort by Location</option>
+                        </select>
+                    </div>
+
+                    {/* FILE HEADERS & FILE DISPLAY */}
                     <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
                         <div className="col-span-5">
                             <div className="flex items-center space-x-4">
@@ -193,11 +248,61 @@ const ViewFile = ({
                                     />
                                 )}
                                 <span>Name</span>
+                                <div className="flex items-center">
+                                    {sortType === 'name' && (
+                                        <button 
+                                            type="button" 
+                                            onClick={toggleSortOrder}
+                                            className="ml-2"
+                                        >
+                                            {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        <div className="col-span-2">Size</div>
-                        <div className="col-span-2">Location</div>
-                        <div className="col-span-2">Last Modified</div>
+                        <div className="col-span-2">
+                            <div className="flex items-center">
+                                <span>Size</span>
+                                {sortType === 'size' && (
+                                    <button 
+                                        type="button" 
+                                        onClick={toggleSortOrder}
+                                        className="ml-2"
+                                    >
+                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                                    </button>
+                                )}
+                            </div>    
+                        </div>
+                        <div className="col-span-2">
+                            <div className="flex items-center">
+                                <span>Location</span>
+                                {sortType === 'location' && (
+                                    <button 
+                                        type="button" 
+                                        onClick={toggleSortOrder}
+                                        className="ml-2"
+                                    >
+                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="col-span-2">
+                            <div className="flex items-center">
+                                <span>Last Modified</span>
+                                {sortType === 'date' && (
+                                    <button 
+                                        type="button" 
+                                        onClick={toggleSortOrder}
+                                        className="ml-2"
+                                    >
+                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                         {showActions && <div className="col-span-1">Actions</div>}
                     </div>
 
@@ -209,7 +314,7 @@ const ViewFile = ({
                             }
                         </div>
                     ) : (
-                        filteredFiles.map(file => (
+                        sortedFiles.map(file => (
                             <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
                                 <div className="col-span-5">
                                     <div className="flex items-center space-x-4">
