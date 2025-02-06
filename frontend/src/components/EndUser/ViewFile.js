@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { File, Loader, ArrowUp, ArrowDown } from 'lucide-react';
+import { File, Loader } from 'lucide-react';
 import FileActions from './FileActions';
+import SortingHeader from './SortingHeader';
+
 
 const ViewFile = ({ 
     searchQuery, 
@@ -247,61 +249,45 @@ const ViewFile = ({
                                         className="rounded"
                                     />
                                 )}
-                                <span>Name</span>
-                                <div className="flex items-center">
-                                    {sortType === 'name' && (
-                                        <button 
-                                            type="button" 
-                                            onClick={toggleSortOrder}
-                                            className="ml-2"
-                                        >
-                                            {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                                        </button>
-                                    )}
-                                </div>
+                                <SortingHeader
+                                    label="Name"
+                                    sortType="name"
+                                    currentSortType={sortType}
+                                    sortOrder={sortOrder}
+                                    onSortChange={handleSortChange}
+                                    onToggleSortOrder={toggleSortOrder}
+                                />
                             </div>
                         </div>
                         <div className="col-span-2">
-                            <div className="flex items-center">
-                                <span>Size</span>
-                                {sortType === 'size' && (
-                                    <button 
-                                        type="button" 
-                                        onClick={toggleSortOrder}
-                                        className="ml-2"
-                                    >
-                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                                    </button>
-                                )}
-                            </div>    
+                            <SortingHeader
+                                label="Size"
+                                sortType="size"
+                                currentSortType={sortType}
+                                sortOrder={sortOrder}
+                                onSortChange={handleSortChange}
+                                onToggleSortOrder={toggleSortOrder}
+                            />   
                         </div>
                         <div className="col-span-2">
-                            <div className="flex items-center">
-                                <span>Location</span>
-                                {sortType === 'location' && (
-                                    <button 
-                                        type="button" 
-                                        onClick={toggleSortOrder}
-                                        className="ml-2"
-                                    >
-                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                                    </button>
-                                )}
-                            </div>
+                            <SortingHeader
+                                label="Location"
+                                sortType="location"
+                                currentSortType={sortType}
+                                sortOrder={sortOrder}
+                                onSortChange={handleSortChange}
+                                onToggleSortOrder={toggleSortOrder}
+                            />
                         </div>
                         <div className="col-span-2">
-                            <div className="flex items-center">
-                                <span>Last Modified</span>
-                                {sortType === 'date' && (
-                                    <button 
-                                        type="button" 
-                                        onClick={toggleSortOrder}
-                                        className="ml-2"
-                                    >
-                                        {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                                    </button>
-                                )}
-                            </div>
+                            <SortingHeader
+                                label="Last Modified"
+                                sortType="date"
+                                currentSortType={sortType}
+                                sortOrder={sortOrder}
+                                onSortChange={handleSortChange}
+                                onToggleSortOrder={toggleSortOrder}
+                            />
                         </div>
                         {showActions && <div className="col-span-1">Actions</div>}
                     </div>

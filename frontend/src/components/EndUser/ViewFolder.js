@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Folder, MoreVertical, ChevronLeft, File } from 'lucide-react';
 import FileActions from './FileActions';
+import SortingHeader from './SortingHeader';
 
 const ViewFolder = ({ 
     currentFolder,
@@ -15,6 +16,8 @@ const ViewFolder = ({
     const [files, setFiles] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [sortType, setSortType] = useState('date');   // State for sorting type
+    const [sortOrder, setSortOrder] = useState('desc'); // State for sorting order
 
     const fetchContents = async () => {
         try {
@@ -88,6 +91,45 @@ const ViewFolder = ({
         }
         return !file.is_archived;
     });
+
+    // Sorting Logic
+    const sortFiles = (files) => {
+        if (sortType === 'date') {  // Last Modified (date)
+            return files.sort((a, b) => 
+                sortOrder === 'desc' ? new Date(b.created_at) - new Date(a.created_at) : new Date(a.created_at) - new Date(b.created_at)
+            );
+        } else if (sortType === 'name') {   // Name (string)      
+            return files.sort((a, b) => {
+                const nameA = a.original_name || a.name;
+                const nameB = b.original_name || b.name;
+                return sortOrder === 'desc' ? nameB.localeCompare(nameA) : nameA.localeCompare(nameB);
+            });
+        } else if (sortType === 'size') {   // Size (raw size values)
+            return files.sort((a, b) => {
+                return sortOrder === 'desc' ? b.size - a.size : a.size - b.size;
+            });
+        } else if (sortType === 'location') {   // Location (string)
+            return files.sort((a, b) => {
+                const locationA = a.folder_name || '';
+                const locationB = b.folder_name || '';
+                return sortOrder === 'desc' ? locationB.localeCompare(locationA) : locationA.localeCompare(locationB);
+            });
+        }
+    }
+    // Apply sorting
+    const sortedFiles = sortFiles(filteredFiles);
+
+    // Change sorting type (name, size, location, date)
+    const handleSortChange = (event) => {
+        const newSortType = event.target.value;
+        setSortType(newSortType);
+        setSortOrder('desc'); // Default to descending when changing sorting type
+    };
+
+    // Change the sorting order (asc,desc)
+    const toggleSortOrder = () => {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    };
 
     if (loading) {
         return (
@@ -173,10 +215,48 @@ const ViewFolder = ({
                         <div>
                             <h3 className="text-lg font-medium mb-4">Files</h3>
                             <div className="border rounded-lg">
+                                {/* SORT BY DATE/NAME/SIZE - DROPDOWN SELECTION */}
+                                <div className="flex justify-end items-center p-2 bg-gray-50">                
+                                    <select 
+                                        onChange={handleSortChange} 
+                                        className="border rounded p-2 text-sm"
+                                    >
+                                        <option value="date">Sort by Date</option>
+                                        <option value="name">Sort by Name</option>
+                                        <option value="size">Sort by Size</option>
+                                    </select>
+                                </div>
                                 <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
-                                    <div className="col-span-5">Name</div>
-                                    <div className="col-span-2">Size</div>
-                                    <div className="col-span-3">Last Modified</div>
+                                    <div className="col-span-5">
+                                        <SortingHeader
+                                            label="Name"
+                                            sortType="name"
+                                            currentSortType={sortType}
+                                            sortOrder={sortOrder}
+                                            onSortChange={handleSortChange}
+                                            onToggleSortOrder={toggleSortOrder}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <SortingHeader
+                                            label="Size"
+                                            sortType="size"
+                                            currentSortType={sortType}
+                                            sortOrder={sortOrder}
+                                            onSortChange={handleSortChange}
+                                            onToggleSortOrder={toggleSortOrder}
+                                        />
+                                    </div>
+                                    <div className="col-span-3">
+                                        <SortingHeader
+                                            label="Last Modified"
+                                            sortType="date"
+                                            currentSortType={sortType}
+                                            sortOrder={sortOrder}
+                                            onSortChange={handleSortChange}
+                                            onToggleSortOrder={toggleSortOrder}
+                                        />
+                                    </div>
                                     <div className="col-span-2">Actions</div>
                                 </div>
                                 {filteredFiles.map((file) => (
