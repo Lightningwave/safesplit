@@ -34,7 +34,7 @@ const ShareFileAction = ({ file, user }) => {
             // to check for duplicates
             if (!emails.includes(newEmail)) {
                 setEmails([...emails, newEmail]);
-                setEmailInput('');    // to clear the input
+                setEmailInput('');      // to clear the input
                 setError('');           // to clear previous error
             } else {
                 setError(`This email is already in the list: ${newEmail}`);
@@ -278,7 +278,7 @@ const ShareFileAction = ({ file, user }) => {
                                     </div>
                                 </div>
                                 <input
-                                    type="text"
+                                    type="email"
                                     id="email"
                                     value={emailInput}
                                     onChange={(e) => setEmailInput(e.target.value)}
@@ -296,10 +296,10 @@ const ShareFileAction = ({ file, user }) => {
                                         <span>{email}</span>
                                         <button
                                             onClick={() => handleDeleteEmail(email)}
-                                            className={`ml-2 ${shareGenerated ? 'text-gray-500 cursor-not-allowed' : 'text-red-500 hover:text-red-700'}`}
+                                            className={`ml-2 ${shareGenerated ? 'text-gray-500 cursor-not-allowed' : 'text-red-600 hover:text-red-800'}`}
                                             disabled={shareGenerated}   // to disable, if share link is generated
                                         >
-                                            X
+                                            <X size={16} />
                                         </button>
                                     </div>
                                 ))}
