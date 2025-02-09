@@ -316,6 +316,13 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
+	// Get file info early for use in verification
+	file, err := c.fileModel.GetFileByID(share.FileID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
 	if share.ShareType == models.RecipientShare {
 		// Validate password only - no email needed since we have the share
 		share, validationErr := c.fileShareModel.ValidateRecipientShare(shareLink, req.Password)
@@ -326,17 +333,17 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 			return
 		}
 
-		// Send 2FA to the email associated with the share
-		if err := c.twoFactorService.SendTwoFactorToken(share.ID, share.Email); err != nil {
+		// Send verification code to the email associated with the share
+		if err := c.twoFactorService.SendShareVerificationToken(share.ID, share.Email, file.OriginalName); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
-				"error":  "Failed to send 2FA code"})
+				"error":  "Failed to send verification code"})
 			return
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"status":  "success",
-			"message": "2FA code sent to registered email",
+			"message": "Verification code sent to registered email",
 			"data": gin.H{
 				"share_id": share.ID,
 			},
@@ -351,7 +358,6 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 
 	c.processFileAccess(ctx, share, req.Password)
 }
-
 func (c *ShareFileController) validatePremiumShare(share *models.FileShare) error {
 	if share.ExpiresAt != nil && time.Now().After(*share.ExpiresAt) {
 		return fmt.Errorf("share link has expired")
@@ -576,10 +582,10 @@ func (c *ShareFileController) sendFileResponse(ctx *gin.Context, file *models.Fi
 	))
 	ctx.Header("Content-Type", file.MimeType)
 	ctx.Header("Content-Length", fmt.Sprintf("%d", len(data)))
-	ctx.Header("X-Original-Filename", escapedName)                                                                       
-	ctx.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Type, Content-Length, X-Original-Filename") 
+	ctx.Header("X-Original-Filename", escapedName)
+	ctx.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Type, Content-Length, X-Original-Filename")
 	ctx.Header("Content-Description", "File Transfer")
 	ctx.Header("Content-Transfer-Encoding", "binary")
-	log.Printf("Sending file response: %s (Size: %d bytes)", file.OriginalName, len(data)) 
+	log.Printf("Sending file response: %s (Size: %d bytes)", file.OriginalName, len(data))
 	ctx.Data(http.StatusOK, file.MimeType, data)
 }

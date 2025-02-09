@@ -16,8 +16,6 @@ func NewLogoutController(userModel *models.UserModel) *LogoutController {
 }
 
 func (c *LogoutController) Logout(ctx *gin.Context) {
-	// Since we're using JWT, just return success
-	// Frontend will handle token removal
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "Successfully logged out",
 	})

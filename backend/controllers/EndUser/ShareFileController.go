@@ -278,6 +278,15 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
+	// Get file info early to use in verification
+	file, err := c.fileModel.GetFileByID(share.FileID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"status": "error",
+			"error":  "File not found"})
+		return
+	}
+
 	// Check if share has expired
 	if share.ExpiresAt != nil && time.Now().After(*share.ExpiresAt) {
 		ctx.JSON(http.StatusForbidden, gin.H{
@@ -314,7 +323,7 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		}
 
 		// Send 2FA to the email associated with the share
-		if err := c.twoFactorService.SendTwoFactorToken(share.ID, share.Email); err != nil {
+		if err := c.twoFactorService.SendShareVerificationToken(share.ID, share.Email, file.OriginalName); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
 				"error":  "Failed to send 2FA code"})
