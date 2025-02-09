@@ -15,61 +15,75 @@ const ShareFileAction = ({ file, user }) => {
    const isPremium = user?.role === 'premium_user';
 
    const handleShare = async (e) => {
-       e.preventDefault();
-       setIsLoading(true);
-       setError('');
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
-       try {
-           const token = localStorage.getItem('token');
-           if (!token) {
-               setError('Please log in to share files.');
-               return;
-           }
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setError('Please log in to share files.');
+            return;
+        }
 
-           // Determine share type based on email presence
-           const shareType = email ? 'recipient' : 'normal';
+        const shareType = email ? 'recipient' : 'normal';
 
-           const shareData = {
-               password: password,
-               share_type: shareType,
-               ...(email && { email }),
-               ...(isPremium && {
-                   expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-                   max_downloads: maxDownloads ? parseInt(maxDownloads) : null
-               })
-           };
+        const shareData = {
+            password: password,
+            share_type: shareType,
+            ...(email && { email }),
+            ...(isPremium && {
+                expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+                max_downloads: maxDownloads ? parseInt(maxDownloads) : null
+            })
+        };
 
-           const endpoint = isPremium 
-               ? `/api/premium/shares/files/${file.id}`
-               : `/api/files/${file.id}/share`;
+        const endpoint = isPremium 
+            ? `/api/premium/shares/files/${file.id}`
+            : `/api/files/${file.id}/share`;
 
-           const response = await fetch(endpoint, {
-               method: 'POST',
-               headers: {
-                   'Content-Type': 'application/json',
-                   'Authorization': `Bearer ${token}`,
-               },
-               body: JSON.stringify(shareData),
-           });
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(shareData),
+        });
 
-           const data = await response.json();
+        const data = await response.json();
 
-           if (!response.ok) {
-               throw new Error(data.error || 'Failed to create share link');
-           }
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create share link');
+        }
 
-           if (data.status === "success") {
-            setShareLink(data.data.share_link);
+        if (data.status === "success") {
+            const baseUrl = 'https://safesplit.xyz';
+            let sharePath;
+            
+            if (email) {
+                // For recipient shares (both premium and normal)
+                sharePath = '/protected-share/';
+            } else if (isPremium) {
+                // For premium normal shares
+                sharePath = '/premium/share/';
+            } else {
+                // For regular normal shares
+                sharePath = '/share/';
+            }
+            
+            const shareUrl = `${baseUrl}${sharePath}${data.data.raw_link}`;
+            setShareLink(shareUrl);
         } else {
             throw new Error(data.error || 'Failed to create share link');
         }
 
-       } catch (error) {
-           setError(error.message);
-       } finally {
-           setIsLoading(false);
-       }
-   };
+    } catch (error) {
+        setError(error.message);
+    } finally {
+        setIsLoading(false);
+    }
+};
 
    const copyToClipboard = async () => {
        try {
