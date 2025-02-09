@@ -43,7 +43,7 @@ BEGIN
     ) VALUES
     (
         'end_user',
-        'end_user@example.com',
+        'end_user@safesplit.xyz',
         '$2a$10$b.WsKp9GR.8pcdQjxMggGeCtTL7nvuc1oW2LfZu0FrM5SLv3dhkge',
         UNHEX('CC31AD132A4D1F34A9FA9B6C3A693BB146D1BA449F2B573EBAB79DB9053EC715'), -- salt
         UNHEX('CC31AD132A4D1F34A9FA9B6C3A693BB1'),                                 -- nonce
@@ -57,7 +57,7 @@ BEGIN
     ),
     (
         'premium_user',
-        'premium_user@example.com',
+        'premium_user@safesplit.xyz',
         '$2a$10$b.WsKp9GR.8pcdQjxMggGeCtTL7nvuc1oW2LfZu0FrM5SLv3dhkge',
         UNHEX('9A3254645BFD269D14C146680E49927B51EBC20ADA1EB6C94E4F704986DCC33A'), -- salt
         UNHEX('9A3254645BFD269D14C146680E49927B'),                                 -- nonce
