@@ -34,7 +34,9 @@ type EndUserHandlers struct {
 	DeleteFileController     *EndUser.DeleteFileController
 	MassDeleteFileController *EndUser.MassDeleteFileController
 	ArchiveFileController    *EndUser.ArchiveFileController
+	UnarchiveFileController  *EndUser.UnarchiveFileController
 	MassArchiveController    *EndUser.MassArchiveFileController
+	MassUnarchiveController  *EndUser.MassUnarchiveFileController
 	ShareFileController      *EndUser.ShareFileController
 	CreateFolderController   *EndUser.CreateFolderController
 	ViewFolderController     *EndUser.ViewFolderController
@@ -67,8 +69,8 @@ type SysAdminHandlers struct {
 	ViewDeletedUserAccountController *SysAdmin.ViewDeletedUserAccountController
 	ViewUserStorageController        *SysAdmin.ViewUserStorageController
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
-	ViewFeedbacksController         *SysAdmin.ViewFeedbacksController   
-    ViewReportsController           *SysAdmin.ViewReportsController 
+	ViewFeedbacksController          *SysAdmin.ViewFeedbacksController
+	ViewReportsController            *SysAdmin.ViewReportsController
 }
 
 func NewRouteHandlers(
@@ -89,6 +91,7 @@ func NewRouteHandlers(
 	compressionService *services.CompressionService,
 	rsService *services.ReedSolomonService,
 	twoFactorService *services.TwoFactorAuthService,
+	emailService *services.SMTPEmailService,
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
@@ -110,8 +113,8 @@ func NewRouteHandlers(
 			ViewDeletedUserAccountController: SysAdmin.NewViewDeletedUserAccountController(userModel),
 			ViewUserStorageController:        SysAdmin.NewViewUserStorageController(userModel),
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
-			ViewFeedbacksController:         SysAdmin.NewViewFeedbacksController(feedbackModel),
-			ViewReportsController:           SysAdmin.NewViewReportsController(feedbackModel, userModel),
+			ViewFeedbacksController:          SysAdmin.NewViewFeedbacksController(feedbackModel),
+			ViewReportsController:            SysAdmin.NewViewReportsController(feedbackModel, userModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
@@ -122,8 +125,10 @@ func NewRouteHandlers(
 			DeleteFileController:     EndUser.NewDeleteFileController(fileModel),
 			MassDeleteFileController: EndUser.NewMassDeleteFileController(fileModel),
 			ArchiveFileController:    EndUser.NewArchiveFileController(fileModel),
+			UnarchiveFileController:  EndUser.NewUnarchiveFileController(fileModel),
 			MassArchiveController:    EndUser.NewMassArchiveFileController(fileModel),
-			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
+			MassUnarchiveController:  EndUser.NewMassUnarchiveFileController(fileModel),
+			ShareFileController:      EndUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel, twoFactorService, emailService, compressionService),
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
@@ -131,13 +136,13 @@ func NewRouteHandlers(
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
-			ReportController:   EndUser.NewReportController(feedbackModel, fileModel),
-			FeedbackController: EndUser.NewFeedbackController(feedbackModel),
+			ReportController:         EndUser.NewReportController(feedbackModel, fileModel),
+			FeedbackController:       EndUser.NewFeedbackController(feedbackModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
-			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel),
+			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel, twoFactorService, emailService, compressionService),
 		},
 	}
 }
@@ -157,8 +162,17 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 	api.POST("/login", handlers.LoginController.Login)
 	api.POST("/super-login", handlers.SuperAdminLoginController.Login)
 	api.POST("/register", handlers.CreateAccountController.CreateAccount)
+
+	// Public share routes
+	api.GET("/files/share/:shareLink", handlers.EndUserHandlers.ShareFileController.AccessShare)
 	api.POST("/files/share/:shareLink", handlers.EndUserHandlers.ShareFileController.AccessShare)
+	api.POST("/files/share/:shareLink/verify", handlers.EndUserHandlers.ShareFileController.Verify2FAAndDownload)
+
+	// Premium share routes
+	api.GET("/premium/shares/:shareLink", handlers.PremiumUserHandlers.AdvancedShareFileController.AccessShare)
 	api.POST("/premium/shares/:shareLink", handlers.PremiumUserHandlers.AdvancedShareFileController.AccessShare)
+	api.POST("/premium/shares/:shareLink/verify", handlers.PremiumUserHandlers.AdvancedShareFileController.Verify2FAAndDownload)
+
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
@@ -195,7 +209,6 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 
 func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 	protected.PUT("/reset-password", handlers.PasswordResetController.ResetPassword)
-	// Existing files routes
 	files := protected.Group("/files")
 	{
 		files.GET("", handlers.ViewFilesController.ListUserFiles)
@@ -208,9 +221,10 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		files.DELETE("/:id", handlers.DeleteFileController.Delete)
 		files.POST("/mass-delete", handlers.MassDeleteFileController.Delete)
 		files.PUT("/:id/archive", handlers.ArchiveFileController.Archive)
+		files.PUT("/:id/unarchive", handlers.UnarchiveFileController.Unarchive)
 		files.POST("/mass-archive", handlers.MassArchiveController.Archive)
+		files.POST("/mass-unarchive", handlers.MassUnarchiveController.Unarchive)
 		files.POST("/:id/share", handlers.ShareFileController.CreateShare)
-		files.GET("/share/:shareLink", handlers.ShareFileController.AccessShare)
 	}
 
 	folders := protected.Group("/folders")
@@ -231,18 +245,18 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 		payment.POST("/cancel", handlers.SubscriptionController.CancelSubscription)
 	}
 	feedback := protected.Group("/feedback")
-    {
-        feedback.POST("", handlers.FeedbackController.SubmitFeedback)
-        feedback.GET("", handlers.FeedbackController.GetUserFeedback)
-        feedback.GET("/categories", handlers.FeedbackController.GetFeedbackCategories)
-    }
+	{
+		feedback.POST("", handlers.FeedbackController.SubmitFeedback)
+		feedback.GET("", handlers.FeedbackController.GetUserFeedback)
+		feedback.GET("/categories", handlers.FeedbackController.GetFeedbackCategories)
+	}
 
-    reports := protected.Group("/reports")
-    {
-        reports.POST("/file/:id", handlers.ReportController.ReportFile)
-        reports.POST("/share/:shareLink", handlers.ReportController.ReportShare)
-        reports.GET("", handlers.ReportController.GetUserReports)
-    }
+	reports := protected.Group("/reports")
+	{
+		reports.POST("/file/:id", handlers.ReportController.ReportFile)
+		reports.POST("/share/:shareLink", handlers.ReportController.ReportShare)
+		reports.GET("", handlers.ReportController.GetUserReports)
+	}
 
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
@@ -285,18 +299,18 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 	sysAdmin.GET("/storage/stats", handlers.ViewUserStorageController.GetStorageStats)
 
 	feedback := sysAdmin.Group("/feedback")
-    {
-        feedback.GET("", handlers.ViewFeedbacksController.GetAllFeedbacks)
-        feedback.GET("/:id", handlers.ViewFeedbacksController.GetFeedback)
-        feedback.PUT("/:id/status", handlers.ViewFeedbacksController.UpdateFeedbackStatus)
-        feedback.GET("/stats", handlers.ViewFeedbacksController.GetFeedbackStats)
-    }
+	{
+		feedback.GET("", handlers.ViewFeedbacksController.GetAllFeedbacks)
+		feedback.GET("/:id", handlers.ViewFeedbacksController.GetFeedback)
+		feedback.PUT("/:id/status", handlers.ViewFeedbacksController.UpdateFeedbackStatus)
+		feedback.GET("/stats", handlers.ViewFeedbacksController.GetFeedbackStats)
+	}
 
-    reports := sysAdmin.Group("/reports")
-    {
-        reports.GET("", handlers.ViewReportsController.GetAllReports)
-        reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
-        reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
-        reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
-    }
+	reports := sysAdmin.Group("/reports")
+	{
+		reports.GET("", handlers.ViewReportsController.GetAllReports)
+		reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
+		reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
+		reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
+	}
 }
