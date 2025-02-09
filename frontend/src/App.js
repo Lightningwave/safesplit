@@ -23,7 +23,6 @@ function App() {
     setUser(null);
   };
 
-  // Helper function to check if user has access to current route
   const isRouteAccessible = (allowedRoles) => {
     return user && allowedRoles.includes(user.role);
   };
@@ -31,7 +30,6 @@ function App() {
   return (
     <Router>
       <div className="flex flex-col min-h-screen">
-        {/* Show NavigationBar only when user is not logged in */}
         {!user && <NavigationBar user={user} onLogout={handleLogout} />}
         
         <Routes>
@@ -46,39 +44,24 @@ function App() {
           {/* Authentication Routes */}
           <Route 
             path="/login" 
-            element={
-              user ? (
-                <Navigate to={getDashboardByRole(user.role)} />
-              ) : (
-                <LoginForm onLogin={setUser} />
-              )
-            } 
+            element={user ? <Navigate to={getDashboardByRole(user.role)} /> : <LoginForm onLogin={setUser} />} 
           />
           
           <Route 
             path="/super-login" 
-            element={
-              user ? (
-                <Navigate to={getDashboardByRole(user.role)} />
-              ) : (
-                <SuperAdminLogin onLogin={setUser} />
-              )
-            } 
+            element={user ? <Navigate to={getDashboardByRole(user.role)} /> : <SuperAdminLogin onLogin={setUser} />} 
           />
           
           <Route 
             path="/register" 
-            element={
-              user ? (
-                <Navigate to={getDashboardByRole(user.role)} />
-              ) : (
-                <RegisterForm />
-              )
-            } 
+            element={user ? <Navigate to={getDashboardByRole(user.role)} /> : <RegisterForm />} 
           />
 
-          <Route path="/share/:shareLink" element={<SharedFileAccess />} />
-          <Route path="/premium/share/:shareLink" element={<SharedFileAccess />} />
+          {/* Share Access Routes */}
+          <Route path="/share/:shareId" element={<SharedFileAccess />} />
+          <Route path="/protected-share/:shareId" element={<SharedFileAccess isProtected={true} />} />
+          <Route path="/premium/share/:shareId" element={<SharedFileAccess isPremium={true} />} />
+          <Route path="/premium/protected-share/:shareId" element={<SharedFileAccess isPremium={true} isProtected={true} />} />
 
           {/* Protected Routes */}
           <Route 
@@ -91,7 +74,8 @@ function App() {
               />
             } 
           />
-            <Route 
+
+          <Route 
             path="/billing" 
             element={
               <ProtectedRoute 
@@ -140,7 +124,6 @@ function App() {
               />
             } 
           />
-
 
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />

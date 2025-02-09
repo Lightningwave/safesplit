@@ -170,6 +170,8 @@ CREATE TABLE file_shares (
     download_count INT DEFAULT 0,                 -- Current downloads
     is_active BOOLEAN DEFAULT TRUE,               -- Share status
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    share_type VARCHAR(20) NOT NULL DEFAULT 'normal',  -- Share type (normal/recipient)
+    email VARCHAR(255) NULL,                      -- Recipient email for recipient shares
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
     FOREIGN KEY (shared_by) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -190,7 +192,7 @@ CREATE TABLE activity_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,                         -- User performing action
     activity_type ENUM('upload', 'download', 'delete', 'share', 'login', 
-                      'logout', 'archive', 'restore', 'encrypt', 'decrypt') NOT NULL,
+                      'logout', 'archive', 'restore', 'encrypt', 'decrypt','unarchive') NOT NULL,
     file_id INT,                                  -- Associated file
     folder_id INT,                                -- Associated folder
     ip_address VARCHAR(45),                       -- User's IP

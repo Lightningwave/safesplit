@@ -18,7 +18,6 @@ func (h *SubscriptionHandler) ProcessExpiredSubscriptions() error {
 	return h.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 
-		// Update all expired subscriptions regardless of storage
 		result := tx.Exec(`
             UPDATE users u
             INNER JOIN billing_profiles bp ON u.id = bp.user_id
