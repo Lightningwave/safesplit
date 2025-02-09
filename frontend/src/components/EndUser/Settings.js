@@ -7,7 +7,7 @@ import TwoFactorSettings from './TwoFactorAuthentication';
 const Settings = ({ user: initialUser, onUserUpdate }) => {
     const [activeTab, setActiveTab] = useState('account');
     const [currentUser, setCurrentUser] = useState(initialUser?.data?.user || {});
-    const [billingProfile, setBillingProfile] = useState(initialUser?.data?.billing_profile || {});
+    const [billingProfile, setBillingProfile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -29,7 +29,9 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCurrentUser(data.data.user);
-                setBillingProfile(data.data.billing_profile);
+                if (data.data.billing_profile) {
+                    setBillingProfile(data.data.billing_profile);
+                }
                 if (onUserUpdate) onUserUpdate(data);
             }
         } catch (error) {
@@ -89,11 +91,52 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
         </div>
     );
 
-    const formatBytes = (bytes) => {
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        if (bytes === 0) return '0 Bytes';
-        const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-        return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+    const renderAccountDetails = () => {
+        return (
+            <div className="space-y-3">
+                <p><strong>Username:</strong> {currentUser.username}</p>
+                <p><strong>Email:</strong> {currentUser.email}</p>
+                <p><strong>Subscription Plan:</strong> {currentUser.subscription_status || 'Free'}</p>
+                
+                {/* Only show billing details if billing profile exists */}
+                {billingProfile && (
+                    <>
+                        <p><strong>Billing Cycle:</strong> {billingProfile.billing_cycle}</p>
+                        <p>
+                            <strong>Next Billing Date:</strong> {' '}
+                            {billingProfile.next_billing_date 
+                                ? new Date(billingProfile.next_billing_date).toLocaleDateString()
+                                : 'N/A'
+                            }
+                        </p>
+                    </>
+                )}
+
+                {/* Show cancel button only if user has an active premium subscription */}
+                {currentUser.subscription_status === 'premium' && 
+                 billingProfile?.billing_status === 'active' && (
+                    <div className="mt-6">
+                        <button
+                            onClick={handleCancelSubscription}
+                            disabled={loading}
+                            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        >
+                            {loading ? 'Processing...' : 'Cancel Subscription'}
+                        </button>
+                    </div>
+                )}
+
+                {/* Show cancelled subscription message if applicable */}
+                {billingProfile?.billing_status === 'cancelled' && (
+                    <div className="mt-6 p-4 bg-gray-50 rounded-md">
+                        <p className="text-gray-700">
+                            Your subscription is cancelled and will end on{' '}
+                            {new Date(billingProfile.next_billing_date).toLocaleDateString()}
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -143,35 +186,7 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
             {activeTab === 'account' && (
                 <div>
                     <h2 className="text-xl font-semibold mb-4">Account Details</h2>
-                    <div className="space-y-3">
-                        <p><strong>Username:</strong> {currentUser.username}</p>
-                        <p><strong>Email:</strong> {currentUser.email}</p>
-                        <p><strong>Subscription Plan:</strong> {currentUser.subscription_status}</p>
-                        {billingProfile && (
-                            <>
-                                <p><strong>Billing Cycle:</strong> {billingProfile.billing_cycle}</p>
-                                <p><strong>Next Billing Date:</strong> {new Date(billingProfile.next_billing_date).toLocaleDateString()}</p>
-                            </>
-                        )}
-                        {currentUser.subscription_status === 'premium' && billingProfile?.billing_status === 'active' && (
-                            <div className="mt-6">
-                                <button
-                                    onClick={handleCancelSubscription}
-                                    disabled={loading}
-                                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
-                                >
-                                    {loading ? 'Processing...' : 'Cancel Subscription'}
-                                </button>
-                            </div>
-                        )}
-                        {billingProfile?.billing_status === 'cancelled' && (
-                            <div className="mt-6 p-4 bg-gray-50 rounded-md">
-                                <p className="text-gray-700">
-                                    Your subscription is cancelled and will end on {new Date(billingProfile.next_billing_date).toLocaleDateString()}
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                    {renderAccountDetails()}
                 </div>
             )}
 
