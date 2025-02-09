@@ -1,13 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Download, Trash2, Share2, Archive, MoreVertical, Check } from 'lucide-react';
 import DownloadFileAction from './DownloadFileAction';
 import DeleteFileAction from './DeleteFileAction';
 import ShareFileAction from './ShareFileAction';
 import ArchiveFileAction from './ArchiveFileAction';
-import ReportFileAction from './ReportFileAction';  
+import UnarchiveFileAction from './UnarchiveFileAction';
+import ReportFileAction from './ReportFileAction';
 
 const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, selected = false, onSelect, selectedFiles = [] }) => {
     const [showActions, setShowActions] = useState(false);
+    const actionsRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+                setShowActions(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     const handleClick = (e) => {
         if (isSelectable) {
@@ -18,8 +34,12 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
         }
     };
 
+    const allFilesArchived = selectedFiles.length > 0 
+        ? selectedFiles.every(f => f.is_archived)
+        : file.is_archived;
+
     return (
-        <div className="relative">
+        <div className="relative" ref={actionsRef}>
             <button 
                 onClick={handleClick}
                 className={`p-1 hover:bg-gray-100 rounded transition-colors ${selected ? 'bg-gray-100' : ''}`}
@@ -41,17 +61,25 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                     />
                     <ShareFileAction file={file} user={user} />
-                    <ArchiveFileAction 
-                        file={file} 
-                        selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
-                        onRefresh={onRefresh}
-                    />
+                    {allFilesArchived ? (
+                        <UnarchiveFileAction 
+                            file={file} 
+                            selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
+                            onRefresh={onRefresh}
+                        />
+                    ) : (
+                        <ArchiveFileAction 
+                            file={file} 
+                            selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
+                            onRefresh={onRefresh}
+                        />
+                    )}
                     <DeleteFileAction 
                         file={file} 
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                         onRefresh={onRefresh} 
                     />
-                    <ReportFileAction file={file} />  {/* Add this line */}
+                    <ReportFileAction file={file} />
                 </div>
             )}
         </div>

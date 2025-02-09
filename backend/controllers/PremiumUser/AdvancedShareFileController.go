@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,14 +18,17 @@ import (
 )
 
 type ShareFileController struct {
-	fileModel         *models.FileModel
-	fileShareModel    *models.FileShareModel
-	keyFragmentModel  *models.KeyFragmentModel
-	encryptionService *services.EncryptionService
-	activityLogModel  *models.ActivityLogModel
-	rsService         *services.ReedSolomonService
-	userModel         *models.UserModel
-	serverKeyModel    *models.ServerMasterKeyModel
+	fileModel          *models.FileModel
+	fileShareModel     *models.FileShareModel
+	keyFragmentModel   *models.KeyFragmentModel
+	encryptionService  *services.EncryptionService
+	activityLogModel   *models.ActivityLogModel
+	rsService          *services.ReedSolomonService
+	userModel          *models.UserModel
+	serverKeyModel     *models.ServerMasterKeyModel
+	twoFactorService   *services.TwoFactorAuthService
+	emailService       *services.SMTPEmailService
+	compressionService *services.CompressionService
 }
 
 func NewShareFileController(
@@ -35,32 +40,46 @@ func NewShareFileController(
 	rsService *services.ReedSolomonService,
 	userModel *models.UserModel,
 	serverKeyModel *models.ServerMasterKeyModel,
+	twoFactorService *services.TwoFactorAuthService,
+	emailService *services.SMTPEmailService,
+	compressionService *services.CompressionService,
 ) *ShareFileController {
 	return &ShareFileController{
-		fileModel:         fileModel,
-		fileShareModel:    fileShareModel,
-		keyFragmentModel:  keyFragmentModel,
-		encryptionService: encryptionService,
-		activityLogModel:  activityLogModel,
-		rsService:         rsService,
-		userModel:         userModel,
-		serverKeyModel:    serverKeyModel,
+		fileModel:          fileModel,
+		fileShareModel:     fileShareModel,
+		keyFragmentModel:   keyFragmentModel,
+		encryptionService:  encryptionService,
+		activityLogModel:   activityLogModel,
+		rsService:          rsService,
+		userModel:          userModel,
+		serverKeyModel:     serverKeyModel,
+		twoFactorService:   twoFactorService,
+		emailService:       emailService,
+		compressionService: compressionService,
 	}
 }
 
 type CreateShareRequest struct {
-	FileID       uint       `json:"file_id" binding:"required"`
-	Password     string     `json:"password" binding:"required,min=6"`
-	ExpiresAt    *time.Time `json:"expires_at"`
-	MaxDownloads *int       `json:"max_downloads"`
+	Password     string           `json:"password" binding:"required,min=6"`
+	ExpiresAt    *time.Time       `json:"expires_at"`
+	MaxDownloads *int             `json:"max_downloads"`
+	ShareType    models.ShareType `json:"share_type" binding:"required"`
+	Email        string           `json:"email,omitempty"`
 }
 
 type AccessShareRequest struct {
 	Password string `json:"password" binding:"required"`
+	Email    string `json:"email,omitempty"`
+}
+
+type TwoFactorRequest struct {
+	Code     string `json:"code" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 func (c *ShareFileController) CreateShare(ctx *gin.Context) {
-	log.Printf("Received premium share creation request for file ID: %v", ctx.Param("id"))
+	log.Printf("Received advanced share creation request for file ID: %v", ctx.Param("id"))
+
 	var req CreateShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -70,7 +89,14 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Validate expiry date if provided
+	if req.ShareType == models.RecipientShare && req.Email == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "Email required for recipient share",
+		})
+		return
+	}
+
 	if req.ExpiresAt != nil && req.ExpiresAt.Before(time.Now()) {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
@@ -79,18 +105,15 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	user, exists := ctx.Get("user")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"status": "error",
-			"error":  "Unauthorized access",
-		})
+	user := ctx.MustGet("user").(*models.User)
+
+	fileID, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
 		return
 	}
-	currentUser := user.(*models.User)
 
-	// Get file and verify ownership
-	file, err := c.fileModel.GetFileForDownload(req.FileID, currentUser.ID)
+	file, err := c.fileModel.GetFileForDownload(uint(fileID), user.ID)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"status": "error",
@@ -99,8 +122,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Derive user's KEK
-	kek, err := services.DeriveKeyEncryptionKey(currentUser.Password, currentUser.MasterKeySalt)
+	kek, err := services.DeriveKeyEncryptionKey(user.Password, user.MasterKeySalt)
 	if err != nil {
 		log.Printf("Failed to derive KEK: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -110,11 +132,10 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Decrypt user's master key
 	decryptedMasterKey, err := services.DecryptMasterKey(
-		currentUser.EncryptedMasterKey,
+		user.EncryptedMasterKey,
 		kek,
-		currentUser.MasterKeyNonce,
+		user.MasterKeyNonce,
 	)
 	if err != nil {
 		log.Printf("Failed to decrypt master key: %v", err)
@@ -125,10 +146,8 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Use first 32 bytes of decrypted master key
 	userMasterKey := decryptedMasterKey[:32]
 
-	// Get fragments
 	fragments, err := c.keyFragmentModel.GetUserFragmentsForFile(file.ID)
 	if err != nil || len(fragments) == 0 {
 		log.Printf("Failed to retrieve key fragments for file %d: %v", file.ID, err)
@@ -139,11 +158,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	log.Printf("Creating premium share for file %d with %d fragments", file.ID, len(fragments))
 	userFragment := fragments[0]
-	log.Printf("Selected user fragment with index %d for sharing", userFragment.FragmentIndex)
-
-	// Decrypt the fragment using master key
 	decryptedFragment, err := services.DecryptMasterKey(
 		userFragment.Data,
 		userMasterKey,
@@ -158,7 +173,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Encrypt fragment with share password
 	encryptedFragment, err := c.encryptionService.EncryptKeyFragment(
 		decryptedFragment,
 		[]byte(req.Password),
@@ -172,15 +186,16 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Create premium share record
 	share := &models.FileShare{
 		FileID:               file.ID,
-		SharedBy:             currentUser.ID,
+		SharedBy:             user.ID,
 		EncryptedKeyFragment: encryptedFragment,
 		FragmentIndex:        userFragment.FragmentIndex,
 		ExpiresAt:            req.ExpiresAt,
 		MaxDownloads:         req.MaxDownloads,
 		IsActive:             true,
+		ShareType:            req.ShareType,
+		Email:                req.Email,
 	}
 
 	if err := c.fileShareModel.CreateFileShare(share, req.Password); err != nil {
@@ -192,152 +207,244 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Log premium share creation
-	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
-		UserID:       currentUser.ID,
+	if req.ShareType == models.RecipientShare {
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:3000"
+		}
+
+		shareURL := fmt.Sprintf("%s/protected-share/%s", baseURL, share.ShareLink)
+
+		emailBody := fmt.Sprintf(`Hello,
+
+You have received a secure file share from %s.
+
+File: %s
+Access Link: %s
+
+This link requires a password and email verification to access.
+Please use the same email address this message was sent to when accessing the file.
+
+Best regards,
+SafeSplit Team`, user.Username, file.OriginalName, shareURL)
+
+		if err := c.emailService.SendEmail(
+			req.Email,
+			"Secure File Share Received",
+			emailBody,
+		); err != nil {
+			log.Printf("Failed to send email: %v", err)
+		}
+	}
+
+	c.activityLogModel.LogActivity(&models.ActivityLog{
+		UserID:       user.ID,
 		ActivityType: "share",
 		FileID:       &file.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
-		Details:      fmt.Sprintf("Premium share created (Expires: %v, Max Downloads: %v)", req.ExpiresAt, req.MaxDownloads),
-	}); err != nil {
-		log.Printf("Failed to log share activity: %v", err)
+		Details:      fmt.Sprintf("Created %s share with premium features", req.ShareType),
+	})
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
 	}
+
+	// Determine share path based on type
+	sharePath := "/premium/share/"
+	if req.ShareType == models.RecipientShare {
+		sharePath = "/protected-share/"
+	}
+
+	shareURL := fmt.Sprintf("%s%s%s", baseURL, sharePath, share.ShareLink)
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"share_link": share.ShareLink,
+			"share_link":   shareURL,
+			"raw_link":     share.ShareLink,
+			"requires_2fa": req.ShareType == models.RecipientShare,
 		},
 	})
 }
 
 func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	shareLink := ctx.Param("shareLink")
-	log.Printf("Received premium share access request for link: %s", shareLink)
+	log.Printf("Received share access request for link: %s", shareLink)
+
+	if ctx.Request.Method == "GET" {
+		share, err := c.fileShareModel.GetShareByLink(shareLink)
+		if err != nil {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid share"})
+			return
+		}
+
+		file, err := c.fileModel.GetFileByID(share.FileID)
+		if err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data": gin.H{
+				"requires_password": true,
+				"requires_2fa":      share.ShareType == models.RecipientShare,
+				"recipient_share":   share.ShareType == models.RecipientShare,
+				"file_name":         file.OriginalName,
+				"file_size":         file.Size,
+				"mime_type":         file.MimeType,
+				"created_at":        share.CreatedAt,
+				"expires_at":        share.ExpiresAt,
+				"download_count":    share.DownloadCount,
+				"max_downloads":     share.MaxDownloads,
+			},
+		})
+		return
+	}
+
 	var req AccessShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "Invalid password",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	// Validate share with premium features
-	share, err := c.fileShareModel.ValidateShare(shareLink, req.Password)
+	share, err := c.fileShareModel.GetShareByLink(shareLink)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"status": "error",
-			"error":  "Invalid share link or password",
-		})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid share"})
 		return
 	}
 
-	// Check if share has expired
-	if share.ExpiresAt != nil && time.Now().After(*share.ExpiresAt) {
-		ctx.JSON(http.StatusForbidden, gin.H{
-			"status": "error",
-			"error":  "Share link has expired",
-		})
-		return
-	}
-
-	// Check if maximum downloads reached
-	if share.MaxDownloads != nil && share.DownloadCount >= *share.MaxDownloads {
-		ctx.JSON(http.StatusForbidden, gin.H{
-			"status": "error",
-			"error":  "Maximum number of downloads reached",
-		})
-		return
-	}
-
-	// Check if share is still active
-	if !share.IsActive {
-		ctx.JSON(http.StatusForbidden, gin.H{
-			"status": "error",
-			"error":  "Share link is no longer active",
-		})
-		return
-	}
-
-	log.Printf("Processing premium share access for link: %s", shareLink)
-
-	// Get file metadata
+	// Get file info early for use in verification
 	file, err := c.fileModel.GetFileByID(share.FileID)
 	if err != nil {
-		log.Printf("Failed to get file %d: %v", share.FileID, err)
-		ctx.JSON(http.StatusNotFound, gin.H{
-			"status": "error",
-			"error":  "File not found",
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	if share.ShareType == models.RecipientShare {
+		// Validate password only - no email needed since we have the share
+		share, validationErr := c.fileShareModel.ValidateRecipientShare(shareLink, req.Password)
+		if validationErr != nil {
+			ctx.JSON(http.StatusUnauthorized, gin.H{
+				"status": "error",
+				"error":  "Invalid password"})
+			return
+		}
+
+		// Send verification code to the email associated with the share
+		if err := c.twoFactorService.SendShareVerificationToken(share.ID, share.Email, file.OriginalName); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "Failed to send verification code"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"status":  "success",
+			"message": "Verification code sent to registered email",
+			"data": gin.H{
+				"share_id": share.ID,
+			},
 		})
 		return
 	}
 
-	// Get server fragments
-	serverFragments, err := c.keyFragmentModel.GetServerFragmentsForFile(share.FileID)
+	if err := c.validatePremiumShare(share); err != nil {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.processFileAccess(ctx, share, req.Password)
+}
+func (c *ShareFileController) validatePremiumShare(share *models.FileShare) error {
+	if share.ExpiresAt != nil && time.Now().After(*share.ExpiresAt) {
+		return fmt.Errorf("share link has expired")
+	}
+
+	if share.MaxDownloads != nil && share.DownloadCount >= *share.MaxDownloads {
+		return fmt.Errorf("maximum number of downloads reached")
+	}
+
+	if !share.IsActive {
+		return fmt.Errorf("share link is no longer active")
+	}
+
+	return nil
+}
+
+func (c *ShareFileController) Verify2FAAndDownload(ctx *gin.Context) {
+	shareLink := ctx.Param("shareLink")
+	var req TwoFactorRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	share, err := c.fileShareModel.GetShareByLink(shareLink)
 	if err != nil {
-		log.Printf("Failed to get server fragments: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to process file access",
-		})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid share"})
 		return
 	}
 
-	log.Printf("Retrieved %d server fragments", len(serverFragments))
-
-	// Verify we have enough fragments
-	if len(serverFragments)+1 < int(file.Threshold) {
-		log.Printf("Insufficient fragments: have %d server + 1 shared, need %d",
-			len(serverFragments), file.Threshold)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Insufficient fragments to reconstruct file",
-		})
+	if share.ShareType != models.RecipientShare {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "2FA verification only required for recipient shares"})
 		return
 	}
 
-	// Get server key for decrypting server fragments
+	if err := c.twoFactorService.VerifyToken(share.ID, req.Code); err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA code"})
+		return
+	}
+
+	if err := c.validatePremiumShare(share); err != nil {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.processFileAccess(ctx, share, req.Password)
+}
+
+func (c *ShareFileController) processFileAccess(ctx *gin.Context, share *models.FileShare, password string) {
+	file, err := c.fileModel.GetFileByID(share.FileID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	serverFragments, err := c.keyFragmentModel.GetServerFragmentsForFile(share.FileID)
+	if err != nil || len(serverFragments)+1 < int(file.Threshold) {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Insufficient fragments"})
+		return
+	}
+
 	serverKey, err := c.serverKeyModel.GetActive()
 	if err != nil {
-		log.Printf("Failed to get server key: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to process decryption",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Server key error"})
 		return
 	}
 
 	serverKeyData, err := c.serverKeyModel.GetServerKey(serverKey.KeyID)
 	if err != nil {
 		log.Printf("Failed to get server key data: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to get server key",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get server key"})
 		return
 	}
 
-	// Decrypt shared fragment
 	sharedDecryptedFragment, err := c.encryptionService.DecryptKeyFragment(
 		share.EncryptedKeyFragment,
-		[]byte(req.Password),
+		[]byte(password),
 	)
 	if err != nil {
 		log.Printf("Failed to decrypt shared fragment: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to process file decryption",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process file decryption"})
 		return
 	}
 
-	// Prepare key shares array
 	shares := make([]services.KeyShare, file.Threshold)
 	usedIndices := make(map[int]bool)
 
-	// Add shared fragment first
 	shares[0] = services.KeyShare{
 		Index: share.FragmentIndex,
 		Value: hex.EncodeToString(sharedDecryptedFragment),
@@ -345,11 +452,9 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	usedIndices[share.FragmentIndex] = true
 	log.Printf("Added shared fragment with index %d", share.FragmentIndex)
 
-	// Add server fragments
 	sharesAdded := uint(1)
 	for i := 0; i < len(serverFragments) && sharesAdded < file.Threshold; i++ {
 		fragment := serverFragments[i]
-
 		if usedIndices[fragment.FragmentIndex] {
 			continue
 		}
@@ -371,20 +476,15 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 			FragmentPath: fragment.FragmentPath,
 		}
 		usedIndices[fragment.FragmentIndex] = true
-		log.Printf("Added server fragment %d with index %d", i, fragment.FragmentIndex)
 		sharesAdded++
 	}
 
 	if sharesAdded < file.Threshold {
 		log.Printf("Failed to get enough unique shares: have %d, need %d", sharesAdded, file.Threshold)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to get enough unique shares",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enough unique shares"})
 		return
 	}
 
-	// Get encrypted file data
 	var encryptedData []byte
 	var retrievalErr error
 
@@ -398,14 +498,10 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 
 	if retrievalErr != nil {
 		log.Printf("Failed to retrieve file data: %v", retrievalErr)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to read file data",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file data"})
 		return
 	}
 
-	// Decrypt the file with encryption type
 	decryptedData, err := c.encryptionService.DecryptFileWithType(
 		encryptedData,
 		file.EncryptionIV,
@@ -416,38 +512,32 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	)
 	if err != nil {
 		log.Printf("Failed to decrypt file data: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to decrypt file",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decrypt file"})
 		return
 	}
 
-	// Log premium share access
-	if err := c.activityLogModel.LogActivity(&models.ActivityLog{
+	if file.IsCompressed {
+		log.Printf("Decompressing data for file ID: %d", file.ID)
+		decryptedData, err = c.compressionService.Decompress(decryptedData)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decompress file"})
+			return
+		}
+	}
+
+	if err := c.fileShareModel.IncrementDownloadCount(share.ID); err != nil {
+		log.Printf("Failed to increment download count: %v", err)
+	}
+
+	c.activityLogModel.LogActivity(&models.ActivityLog{
 		UserID:       share.SharedBy,
 		ActivityType: "download",
 		FileID:       &file.ID,
 		IPAddress:    ctx.ClientIP(),
 		Status:       "success",
-		Details:      fmt.Sprintf("Premium shared file download using %d fragments", file.Threshold),
-	}); err != nil {
-		log.Printf("Failed to log share download activity: %v", err)
-	}
+		Details:      fmt.Sprintf("Download with %d fragments", file.Threshold),
+	})
 
-	// Update premium share status - should be before sending response
-	log.Printf("Incrementing download count for share ID %d", share.ID)
-	if err := c.fileShareModel.IncrementDownloadCount(share.ID); err != nil {
-		log.Printf("Failed to increment download count: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "Failed to update download count",
-		})
-		return
-	}
-	log.Printf("Successfully incremented download count for share ID %d", share.ID)
-
-	// Only proceed to send file if increment succeeded
 	c.sendFileResponse(ctx, file, decryptedData)
 }
 
@@ -457,7 +547,6 @@ func (c *ShareFileController) getShardedData(file *models.File) ([]byte, error) 
 		return nil, fmt.Errorf("failed to retrieve shards: %w", err)
 	}
 
-	// Log shard information for debugging
 	validShards := 0
 	for i, shard := range fileShards.Shards {
 		if shard != nil {
@@ -468,13 +557,11 @@ func (c *ShareFileController) getShardedData(file *models.File) ([]byte, error) 
 		}
 	}
 
-	// Validate we have enough shards for reconstruction
 	if !c.rsService.ValidateShards(fileShards.Shards, int(file.DataShardCount)) {
 		return nil, fmt.Errorf("insufficient shards for reconstruction: have %d, need %d",
 			validShards, file.DataShardCount)
 	}
 
-	// Reconstruct file from shards
 	reconstructed, err := c.rsService.ReconstructFile(fileShards.Shards,
 		int(file.DataShardCount), int(file.ParityShardCount))
 	if err != nil {
@@ -486,18 +573,19 @@ func (c *ShareFileController) getShardedData(file *models.File) ([]byte, error) 
 }
 
 func (c *ShareFileController) sendFileResponse(ctx *gin.Context, file *models.File, data []byte) {
-	sanitizedFilename := strings.ReplaceAll(file.OriginalName, `"`, `\"`)
-	encodedFilename := url.QueryEscape(sanitizedFilename)
-
-	ctx.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Type, Content-Length")
-	ctx.Header("Content-Description", "File Transfer")
-	ctx.Header("Content-Transfer-Encoding", "binary")
-	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
-		sanitizedFilename, encodedFilename))
+	escapedName := strings.ReplaceAll(file.OriginalName, `"`, `\"`)
+	utf8Name := url.PathEscape(file.OriginalName)
+	ctx.Header("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="%s"; filename*=UTF-8''%s`,
+		escapedName,
+		utf8Name,
+	))
 	ctx.Header("Content-Type", file.MimeType)
 	ctx.Header("Content-Length", fmt.Sprintf("%d", len(data)))
-	ctx.Header("X-Original-Filename", url.QueryEscape(file.OriginalName))
-
+	ctx.Header("X-Original-Filename", escapedName)
+	ctx.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Type, Content-Length, X-Original-Filename")
+	ctx.Header("Content-Description", "File Transfer")
+	ctx.Header("Content-Transfer-Encoding", "binary")
 	log.Printf("Sending file response: %s (Size: %d bytes)", file.OriginalName, len(data))
 	ctx.Data(http.StatusOK, file.MimeType, data)
 }

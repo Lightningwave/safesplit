@@ -11,6 +11,7 @@ import (
 	"safesplit/services"
 	"strconv"
 	"time"
+
 	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
@@ -110,7 +111,7 @@ func main() {
 	)
 	// Start cleanup scheduler for deleted files
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour) 
+		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
 		log.Println("Starting file cleanup scheduler...")
@@ -145,6 +146,7 @@ func main() {
 		compressionService,
 		rsService,
 		twoFactorService,
+		emailService,
 	)
 
 	// Set up the Gin router with default middleware

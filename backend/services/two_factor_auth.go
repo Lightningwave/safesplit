@@ -120,6 +120,40 @@ Safesplit team`, token)
 
 	return s.emailSender.SendEmail(email, subject, body)
 }
+func (s *TwoFactorAuthService) SendShareVerificationToken(shareID uint, email, fileName string) error {
+    if !s.rateLimiter.Allow(shareID) {
+        return errors.New("rate limit exceeded")
+    }
+
+    token, err := generateToken()
+    if err != nil {
+        return fmt.Errorf("failed to generate token: %w", err)
+    }
+
+    s.mu.Lock()
+    s.tokens[shareID] = &TwoFactorToken{
+        Token:     token,
+        ExpiresAt: time.Now().Add(tokenExpiry),
+    }
+    s.attempts[shareID] = 0
+    s.mu.Unlock()
+
+    subject := "Verify Your Access to Shared File"
+    body := fmt.Sprintf(`Hello,
+
+A file "%s" has been shared with you. To access this file, please use the following verification code:
+
+Verification Code: %s
+
+This code will expire in 10 minutes. Please use it along with your password to access the shared file.
+
+If you didn't expect to receive this file share, please ignore this email.
+
+Best regards,
+SafeSplit Team`, fileName, token)
+
+    return s.emailSender.SendEmail(email, subject, body)
+}
 
 func (s *TwoFactorAuthService) VerifyToken(userID uint, token string) error {
 	s.mu.Lock()
