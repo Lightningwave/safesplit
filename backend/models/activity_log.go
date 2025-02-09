@@ -48,10 +48,8 @@ func (m *ActivityLogModel) GetSystemLogs(filters map[string]interface{}, page, p
 		query = query.Where("user_id = ?", userID)
 	}
 
-	// Get total count
 	query.Count(&total)
 
-	// Apply pagination
 	offset := (page - 1) * pageSize
 	err := query.
 		Order("created_at DESC").

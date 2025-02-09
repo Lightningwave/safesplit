@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, MoreVertical, ChevronLeft, File } from 'lucide-react';
+import { Folder, MoreVertical, ChevronLeft, File, Loader } from 'lucide-react';
 import FileActions from './FileActions';
 
 const ViewFolder = ({ 
@@ -8,6 +8,7 @@ const ViewFolder = ({
     onFolderDelete,
     onBackClick,
     selectedSection,
+    user,
     showActions = true,
     refreshTrigger = 0
 }) => {
@@ -15,6 +16,8 @@ const ViewFolder = ({
     const [files, setFiles] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [selectedFiles, setSelectedFiles] = useState(new Set());
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     const fetchContents = async () => {
         try {
@@ -38,7 +41,6 @@ const ViewFolder = ({
 
             const data = await response.json();
 
-            // Handle different response structures
             if (currentFolder) {
                 setFolders(data.data.folder.sub_folders || []);
                 setFiles(data.data.folder.files || []);
@@ -60,6 +62,8 @@ const ViewFolder = ({
 
     useEffect(() => {
         fetchContents();
+        setSelectedFiles(new Set());
+        setIsSelectionMode(false);
     }, [currentFolder, selectedSection, refreshTrigger]);
 
     const formatFileSize = (bytes) => {
@@ -79,6 +83,31 @@ const ViewFolder = ({
         });
     };
 
+    const handleFileSelection = (fileId) => {
+        setSelectedFiles(prev => {
+            const newSelected = new Set(prev);
+            if (newSelected.has(fileId)) {
+                newSelected.delete(fileId);
+            } else {
+                newSelected.add(fileId);
+            }
+            return newSelected;
+        });
+    };
+
+    const handleBulkSelection = (event) => {
+        if (event.target.checked) {
+            const visibleFileIds = filteredFiles.map(file => file.id);
+            setSelectedFiles(new Set(visibleFileIds));
+        } else {
+            setSelectedFiles(new Set());
+        }
+    };
+
+    const getSelectedFiles = () => {
+        return filteredFiles.filter(file => selectedFiles.has(file.id));
+    };
+
     // Filter files based on selectedSection
     const filteredFiles = files.filter(file => {
         if (selectedSection === 'Archives') {
@@ -92,7 +121,7 @@ const ViewFolder = ({
     if (loading) {
         return (
             <div className="flex items-center justify-center text-gray-600 py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-500 border-t-transparent mr-2" />
+                <Loader className="animate-spin mr-2" />
                 <span>Loading contents...</span>
             </div>
         );
@@ -126,6 +155,20 @@ const ViewFolder = ({
                 </div>
             )}
 
+            {selectedFiles.size > 0 && (
+                <div className="bg-gray-100 p-4 flex justify-between items-center rounded-lg">
+                    <span className="text-sm text-gray-600">
+                        {selectedFiles.size} files selected
+                    </span>
+                    <button
+                        onClick={() => setSelectedFiles(new Set())}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                        Clear Selection
+                    </button>
+                </div>
+            )}
+
             {folders.length === 0 && filteredFiles.length === 0 ? (
                 <div className="p-4 text-gray-500 bg-gray-50 rounded-md text-center">
                     {currentFolder 
@@ -137,20 +180,26 @@ const ViewFolder = ({
                     {folders.length > 0 && (
                         <div>
                             <h3 className="text-lg font-medium mb-4">Folders</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {folders.map((folder) => (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                            {folders.map((folder) => (
                                     <div
                                         key={folder.id}
-                                        className="group relative"
+                                        className="group relative bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
                                     >
                                         <button
                                             onClick={() => onFolderClick(folder)}
-                                            className="w-full flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            className="w-full h-full flex flex-col items-center p-4"
                                         >
-                                            <Folder className="text-gray-400 mr-3" size={24} />
-                                            <span className="text-gray-700 font-medium truncate">
-                                                {folder.name}
-                                            </span>
+                                            <div className="w-full aspect-square flex items-center justify-center">
+                                                <div className="bg-gray-50 rounded-lg p-4 group-hover:bg-gray-100 transition-colors">
+                                                    <Folder className="w-12 h-12 text-gray-600" />
+                                                </div>
+                                            </div>
+                                            <div className="w-full mt-2 text-center">
+                                                <span className="text-sm font-medium text-gray-700 line-clamp-2">
+                                                    {folder.name}
+                                                </span>
+                                            </div>
                                         </button>
                                         {showActions && (
                                             <button
@@ -158,9 +207,12 @@ const ViewFolder = ({
                                                     e.stopPropagation();
                                                     onFolderDelete(folder);
                                                 }}
-                                                className="absolute right-2 top-2 p-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700"
+                                                className="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow 
+                                                        opacity-0 group-hover:opacity-100 transition-opacity 
+                                                        hover:bg-gray-50"
+                                                title="Delete folder"
                                             >
-                                                <MoreVertical size={16} />
+                                                <MoreVertical size={14} className="text-gray-500" />
                                             </button>
                                         )}
                                     </div>
@@ -172,18 +224,32 @@ const ViewFolder = ({
                     {filteredFiles.length > 0 && (
                         <div>
                             <h3 className="text-lg font-medium mb-4">Files</h3>
-                            <div className="border rounded-lg">
+                            <div className="border rounded-lg shadow-sm">
                                 <div className="grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-sm font-medium">
-                                    <div className="col-span-5">Name</div>
+                                    <div className="col-span-5 flex items-center space-x-4">
+                                        <input 
+                                            type="checkbox"
+                                            onChange={handleBulkSelection}
+                                            checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
+                                            className="rounded"
+                                        />
+                                        <span>Name</span>
+                                    </div>
                                     <div className="col-span-2">Size</div>
                                     <div className="col-span-3">Last Modified</div>
                                     <div className="col-span-2">Actions</div>
                                 </div>
                                 {filteredFiles.map((file) => (
                                     <div key={file.id} className="grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50">
-                                        <div className="col-span-5 flex items-center">
-                                            <File size={20} className="text-gray-400 mr-3" />
-                                            <span className="truncate">
+                                        <div className="col-span-5 flex items-center space-x-4">
+                                            <input 
+                                                type="checkbox"
+                                                checked={selectedFiles.has(file.id)}
+                                                onChange={() => handleFileSelection(file.id)}
+                                                className="rounded"
+                                            />
+                                            <File size={20} className="text-gray-400" />
+                                            <span className="truncate" title={file.original_name || file.name}>
                                                 {file.original_name || file.name}
                                             </span>
                                         </div>
@@ -196,7 +262,12 @@ const ViewFolder = ({
                                         <div className="col-span-2">
                                             <FileActions 
                                                 file={file}
+                                                user={user}
                                                 onRefresh={fetchContents}
+                                                isSelectable={isSelectionMode}
+                                                selected={selectedFiles.has(file.id)}
+                                                onSelect={() => handleFileSelection(file.id)}
+                                                selectedFiles={getSelectedFiles()}
                                             />
                                         </div>
                                     </div>

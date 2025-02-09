@@ -176,6 +176,7 @@ func main() {
 		compressionService,
 		rsService,
 		twoFactorService,
+		emailService,
 	)
 
 	// Set up the Gin router with default middleware

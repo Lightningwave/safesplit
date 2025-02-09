@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, X, Info, FolderIcon, Lock } from 'lucide-react';
 
 const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
@@ -44,11 +44,22 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
         }
     };
 
-    const handleFileSelect = (event) => {
+    const handleFileSelect = useCallback((event) => {
         const file = event.target.files[0];
         setSelectedFile(file);
         setError('');
-    };
+    }, []);
+
+    const handleDrop = useCallback((event) => {
+        event.preventDefault();
+        const file = event.dataTransfer.files[0]; // Take only the first file
+        setSelectedFile(file);
+        setError('');
+    }, []);
+
+    const handleDragOver = useCallback((event) => {
+        event.preventDefault();
+    }, []);
 
     const handleUpload = async () => {
         if (!selectedFile) {
@@ -176,7 +187,11 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
                 </div>
 
                 <div className="mb-6">
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <div 
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center"
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                    >
                         <input
                             type="file"
                             onChange={handleFileSelect}

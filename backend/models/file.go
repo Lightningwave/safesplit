@@ -382,11 +382,9 @@ func (m *FileModel) DeleteFile(fileID, userID uint, ipAddress string) error {
 	}
 
 	// Keep shards for potential recovery
-	// We'll only delete physical files for non-sharded files
 	if !file.IsSharded && file.FilePath != "" {
 		if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
 			log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
-			// Don't rollback here as the file might have been already moved/deleted
 			log.Printf("Continuing deletion process despite file removal error")
 		}
 	}
@@ -456,6 +454,44 @@ func (m *FileModel) ArchiveFile(fileID, userID uint, ipAddress string) error {
 
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to complete archive operation: %w", err)
+	}
+
+	return nil
+}
+func (m *FileModel) UnarchiveFile(fileID, userID uint, ipAddress string) error {
+	tx := m.db.Begin()
+
+	// Unarchive the file
+	result := tx.Model(&File{}).
+		Where("id = ? AND user_id = ? AND is_archived = ?", fileID, userID, true).
+		Update("is_archived", false)
+
+	if result.Error != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to unarchive file: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("file not found or not archived")
+	}
+
+	// Log activity
+	activity := &ActivityLog{
+		UserID:       userID,
+		ActivityType: "unarchive",
+		FileID:       &fileID,
+		IPAddress:    ipAddress,
+		Status:       "success",
+	}
+
+	if err := tx.Create(activity).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to log activity: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to complete unarchive operation: %w", err)
 	}
 
 	return nil
@@ -798,7 +834,6 @@ func (m *FileModel) PermanentlyDeleteFile(fileID, userID uint, ipAddress string)
     return nil
 }
 
-// PermanentDeletionLog represents an audit log for permanent deletions
 type PermanentDeletionLog struct {
     ID          uint      `gorm:"primaryKey"`
     UserID      uint      `gorm:"not null"`

@@ -1,234 +1,188 @@
 package models
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"fmt"
-	"log"
-	"time"
+   "crypto/rand"
+   "encoding/base64"
+   "fmt"
+   "time"
+   "golang.org/x/crypto/bcrypt"
+   "gorm.io/gorm"
+)
 
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
+type ShareType string
+
+const (
+   NormalShare    ShareType = "normal"
+   RecipientShare ShareType = "recipient"
 )
 
 type FileShare struct {
-	ID                   uint       `json:"id" gorm:"primaryKey"`
-	FileID               uint       `json:"file_id"`
-	SharedBy             uint       `json:"shared_by"`
-	ShareLink            string     `json:"share_link" gorm:"unique"`
-	PasswordHash         string     `json:"-"`
-	PasswordSalt         string     `json:"-"`
-	EncryptedKeyFragment []byte     `json:"-" gorm:"type:mediumblob"`
-	FragmentIndex        int        `json:"-" gorm:"not null"`
-	ExpiresAt            *time.Time `json:"expires_at"`
-	MaxDownloads         *int       `json:"max_downloads"`
-	DownloadCount        int        `json:"download_count" gorm:"default:0"`
-	IsActive             bool       `json:"is_active" gorm:"default:true"`
-	CreatedAt            time.Time  `json:"created_at"`
-	File                 File       `json:"file" gorm:"foreignKey:FileID"`
+   ID                   uint       `json:"id" gorm:"primaryKey"`
+   FileID               uint       `json:"file_id"`
+   SharedBy             uint       `json:"shared_by"`
+   ShareLink            string     `json:"share_link" gorm:"unique"`
+   PasswordHash         string     `json:"-"`
+   PasswordSalt         string     `json:"-"`
+   EncryptedKeyFragment []byte     `json:"-" gorm:"type:mediumblob"`
+   FragmentIndex        int        `json:"-" gorm:"not null"`
+   ExpiresAt            *time.Time `json:"expires_at"`
+   MaxDownloads         *int       `json:"max_downloads"`
+   DownloadCount        int        `json:"download_count" gorm:"default:0"`
+   IsActive             bool       `json:"is_active" gorm:"default:true"`
+   CreatedAt            time.Time  `json:"created_at"`
+   File                 File       `json:"file" gorm:"foreignKey:FileID"`
+   ShareType            ShareType  `json:"share_type" gorm:"type:varchar(20);default:'normal'"`
+   Email                string     `json:"email,omitempty"`
 }
 
 type FileShareModel struct {
-	db *gorm.DB
+   db *gorm.DB
 }
 
 func NewFileShareModel(db *gorm.DB) *FileShareModel {
-	return &FileShareModel{db: db}
+   return &FileShareModel{db: db}
 }
 
 func generateShareLink() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
+   bytes := make([]byte, 32)
+   if _, err := rand.Read(bytes); err != nil {
+       return "", err
+   }
+   return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-func (m *FileShareModel) CreateFileShareWithStatus(share *FileShare, password string) error {
-	// Generate password salt
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return fmt.Errorf("failed to generate salt: %w", err)
-	}
-	share.PasswordSalt = base64.StdEncoding.EncodeToString(salt)
+func (m *FileShareModel) CreateFileShare(share *FileShare, password string) error {
+   if share.ShareType == RecipientShare && share.Email == "" {
+       return fmt.Errorf("email required for recipient share")
+   }
 
-	// Hash password with salt
-	hashedPassword, err := bcrypt.GenerateFromPassword(
-		[]byte(password+share.PasswordSalt),
-		bcrypt.DefaultCost,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
-	}
-	share.PasswordHash = string(hashedPassword)
+   salt := make([]byte, 16)
+   if _, err := rand.Read(salt); err != nil {
+       return fmt.Errorf("failed to generate salt: %w", err)
+   }
+   share.PasswordSalt = base64.StdEncoding.EncodeToString(salt)
 
-	// Generate unique share link
-	shareLink, err := generateShareLink()
-	if err != nil {
-		return fmt.Errorf("failed to generate share link: %w", err)
-	}
-	share.ShareLink = shareLink
+   hashedPassword, err := bcrypt.GenerateFromPassword(
+       []byte(password+share.PasswordSalt),
+       bcrypt.DefaultCost,
+   )
+   if err != nil {
+       return fmt.Errorf("failed to hash password: %w", err)
+   }
+   share.PasswordHash = string(hashedPassword)
 
-	// Start transaction
-	tx := m.db.Begin()
-	if tx.Error != nil {
-		return fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
+   shareLink, err := generateShareLink()
+   if err != nil {
+       return fmt.Errorf("failed to generate share link: %w", err)
+   }
+   share.ShareLink = shareLink
 
-	// Create share record within transaction
-	if err := tx.Create(share).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create share record: %w", err)
-	}
+   tx := m.db.Begin()
+   if tx.Error != nil {
+       return fmt.Errorf("failed to start transaction: %w", tx.Error)
+   }
 
-	// Update file's IsShared status
-	if err := tx.Model(&File{}).Where("id = ?", share.FileID).Update("is_shared", true).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to update file status: %w", err)
-	}
+   if err := tx.Create(share).Error; err != nil {
+       tx.Rollback()
+       return fmt.Errorf("failed to create share record: %w", err)
+   }
 
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+   if err := tx.Model(&File{}).Where("id = ?", share.FileID).Update("is_shared", true).Error; err != nil {
+       tx.Rollback()
+       return fmt.Errorf("failed to update file status: %w", err)
+   }
 
-	return nil
+   return tx.Commit().Error
 }
 
-func (m *FileShareModel) ValidateShareAccess(shareLink string, password string) (*FileShare, error) {
+func (m *FileShareModel) ValidateShare(shareLink string, password string) (*FileShare, error) {
+   var share FileShare
+   if err := m.db.Where("share_link = ? AND is_active = ? AND share_type = ?", 
+       shareLink, true, NormalShare).Preload("File").First(&share).Error; err != nil {
+       return nil, fmt.Errorf("share not found or inactive")
+   }
+
+   if err := bcrypt.CompareHashAndPassword(
+       []byte(share.PasswordHash),
+       []byte(password+share.PasswordSalt),
+   ); err != nil {
+       return nil, fmt.Errorf("invalid password")
+   }
+
+   return &share, nil
+}
+
+func (m *FileShareModel) ValidateRecipientShare(shareLink string, password string) (*FileShare, error) {
 	var share FileShare
-	if err := m.db.Where("share_link = ? AND is_active = ?", shareLink, true).
-		Preload("File").First(&share).Error; err != nil {
-		return nil, fmt.Errorf("share not found or inactive")
+	if err := m.db.Where("share_link = ? AND is_active = ? AND share_type = ?", 
+		shareLink, true, RecipientShare).Preload("File").First(&share).Error; err != nil {
+		return nil, fmt.Errorf("share not found or invalid")
 	}
-
-	// Check expiration
+ 
 	if share.ExpiresAt != nil && share.ExpiresAt.Before(time.Now()) {
 		share.IsActive = false
 		m.db.Save(&share)
 		return nil, fmt.Errorf("share has expired")
 	}
-
-	// Check download limit
+ 
 	if share.MaxDownloads != nil && share.DownloadCount >= *share.MaxDownloads {
 		share.IsActive = false
 		m.db.Save(&share)
 		return nil, fmt.Errorf("download limit exceeded")
 	}
-
-	// Verify password
+ 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(share.PasswordHash),
 		[]byte(password+share.PasswordSalt),
 	); err != nil {
 		return nil, fmt.Errorf("invalid password")
 	}
-
+ 
 	return &share, nil
-}
+ }
+ func (m *FileShareModel) ValidatePassword(shareLink string, password string) error {
+    var share FileShare
+    if err := m.db.Where("share_link = ?", shareLink).First(&share).Error; err != nil {
+        return fmt.Errorf("share not found")
+    }
 
-// CreateFileShare creates a basic file share with just password protection
-func (m *FileShareModel) CreateFileShare(share *FileShare, password string) error {
-	// Generate password salt
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return fmt.Errorf("failed to generate salt: %w", err)
-	}
-	share.PasswordSalt = base64.StdEncoding.EncodeToString(salt)
+    if err := bcrypt.CompareHashAndPassword(
+        []byte(share.PasswordHash),
+        []byte(password+share.PasswordSalt),
+    ); err != nil {
+        return fmt.Errorf("invalid password")
+    }
 
-	// Hash password with salt
-	hashedPassword, err := bcrypt.GenerateFromPassword(
-		[]byte(password+share.PasswordSalt),
-		bcrypt.DefaultCost,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
-	}
-	share.PasswordHash = string(hashedPassword)
-
-	// Generate unique share link
-	shareLink, err := generateShareLink()
-	if err != nil {
-		return fmt.Errorf("failed to generate share link: %w", err)
-	}
-	share.ShareLink = shareLink
-
-	// Start transaction
-	tx := m.db.Begin()
-	if tx.Error != nil {
-		return fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
-
-	// Create share record within transaction
-	if err := tx.Create(share).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create share record: %w", err)
-	}
-
-	// Update file's IsShared status
-	if err := tx.Model(&File{}).Where("id = ?", share.FileID).Update("is_shared", true).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to update file status: %w", err)
-	}
-
-	return tx.Commit().Error
-}
-
-// ValidateShare validates a share without checking expiry or download count
-func (m *FileShareModel) ValidateShare(shareLink string, password string) (*FileShare, error) {
-	var share FileShare
-	if err := m.db.Where("share_link = ? AND is_active = ?", shareLink, true).
-		Preload("File").First(&share).Error; err != nil {
-		return nil, fmt.Errorf("share not found or inactive")
-	}
-
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword(
-		[]byte(share.PasswordHash),
-		[]byte(password+share.PasswordSalt),
-	); err != nil {
-		return nil, fmt.Errorf("invalid password")
-	}
-
-	return &share, nil
+    return nil
 }
 
 func (m *FileShareModel) IncrementDownloadCount(shareID uint) error {
-	log.Printf("Starting IncrementDownloadCount for share ID %d", shareID)
+   tx := m.db.Begin()
+   if tx.Error != nil {
+       return fmt.Errorf("failed to start transaction: %w", tx.Error)
+   }
+   defer tx.Rollback()
 
-	// Start transaction
-	tx := m.db.Begin()
-	if tx.Error != nil {
-		log.Printf("Failed to start transaction: %v", tx.Error)
-		return fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
-	defer tx.Rollback() // rollback if not committed
+   result := tx.Model(&FileShare{}).
+       Where("id = ?", shareID).
+       Update("download_count", gorm.Expr("download_count + ?", 1))
 
-	log.Printf("Started transaction for share ID %d", shareID)
+   if result.Error != nil {
+       return fmt.Errorf("failed to increment download count: %w", result.Error)
+   }
 
-	result := tx.Model(&FileShare{}).
-		Where("id = ?", shareID).
-		Update("download_count", gorm.Expr("download_count + ?", 1))
+   if result.RowsAffected == 0 {
+       return fmt.Errorf("no share found with ID %d", shareID)
+   }
 
-	if result.Error != nil {
-		log.Printf("Error during update: %v", result.Error)
-		return fmt.Errorf("failed to increment download count: %w", result.Error)
-	}
-
-	log.Printf("Update query executed, affected rows: %d", result.RowsAffected)
-
-	if result.RowsAffected == 0 {
-		log.Printf("No rows affected for share ID %d", shareID)
-		return fmt.Errorf("no share found with ID %d", shareID)
-	}
-
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		log.Printf("Failed to commit transaction: %v", err)
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("Successfully committed download count increment for share ID %d", shareID)
-	return nil
+   return tx.Commit().Error
+}
+func (m *FileShareModel) GetShareByLink(shareLink string) (*FileShare, error) {
+    var share FileShare
+    err := m.db.Where("share_link = ? AND is_active = ?", shareLink, true).
+        Preload("File").First(&share).Error
+    if err != nil {
+        return nil, fmt.Errorf("share not found or inactive")
+    }
+    return &share, nil
 }

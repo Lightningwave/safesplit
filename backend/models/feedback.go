@@ -1,8 +1,9 @@
 package models
 
 import (
+	"fmt"
 	"time"
-    "fmt"
+
 	"gorm.io/gorm"
 )
 
@@ -13,36 +14,32 @@ const (
 	FeedbackTypeFeedback           FeedbackType = "feedback"
 	FeedbackTypeSuspiciousActivity FeedbackType = "suspicious_activity"
 
-	FeedbackStatusPending   FeedbackStatus = "pending"
-	FeedbackStatusInReview  FeedbackStatus = "in_review"
-	FeedbackStatusResolved  FeedbackStatus = "resolved"
+	FeedbackStatusPending  FeedbackStatus = "pending"
+	FeedbackStatusInReview FeedbackStatus = "in_review"
+	FeedbackStatusResolved FeedbackStatus = "resolved"
 )
 
-// Feedback represents the feedback table in the database
 type Feedback struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
-	UserID    uint          `json:"user_id"`
-	Type      FeedbackType  `json:"type" gorm:"type:enum('feedback','suspicious_activity')"`
-	Subject   string        `json:"subject" gorm:"size:255;not null"`
-	Message   string        `json:"message" gorm:"type:text;not null"`
-	Details   string        `json:"details" gorm:"type:text"`
+	UserID    uint           `json:"user_id"`
+	Type      FeedbackType   `json:"type" gorm:"type:enum('feedback','suspicious_activity')"`
+	Subject   string         `json:"subject" gorm:"size:255;not null"`
+	Message   string         `json:"message" gorm:"type:text;not null"`
+	Details   string         `json:"details" gorm:"type:text"`
 	Status    FeedbackStatus `json:"status" gorm:"type:enum('pending','in_review','resolved');default:pending"`
-	CreatedAt time.Time     `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
-	UpdatedAt time.Time     `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP;ON UPDATE CURRENT_TIMESTAMP"`
-	User      User          `json:"user" gorm:"foreignKey:UserID"`
+	CreatedAt time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP;ON UPDATE CURRENT_TIMESTAMP"`
+	User      User           `json:"user" gorm:"foreignKey:UserID"`
 }
 
-// FeedbackModel handles database operations for feedback
 type FeedbackModel struct {
 	db *gorm.DB
 }
 
-// NewFeedbackModel creates a new FeedbackModel instance
 func NewFeedbackModel(db *gorm.DB) *FeedbackModel {
 	return &FeedbackModel{db: db}
 }
 
-// Create adds a new feedback entry
 func (m *FeedbackModel) Create(feedback *Feedback) error {
 	return m.db.Create(feedback).Error
 }
@@ -79,49 +76,43 @@ func (m *FeedbackModel) GetAllByUserAndType(userID uint, feedbackType FeedbackTy
 
 // GetAll retrieves all feedback entries with optional filters
 func (m *FeedbackModel) GetAll(filters map[string]interface{}, page, pageSize int) ([]Feedback, int64, error) {
-    var feedbacks []Feedback
-    var total int64
+	var feedbacks []Feedback
+	var total int64
 
-    query := m.db.Model(&Feedback{}).Preload("User")
+	query := m.db.Model(&Feedback{}).Preload("User")
 
-    // Apply filters
-    if feedbackType, ok := filters["type"].(FeedbackType); ok {
-        query = query.Where("type = ?", feedbackType)
-    }
-    if status, ok := filters["status"].(string); ok {
-        query = query.Where("status = ?", status)
-    }
-    if userID, ok := filters["user_id"].(uint); ok {
-        query = query.Where("user_id = ?", userID)
-    }
+	if feedbackType, ok := filters["type"].(FeedbackType); ok {
+		query = query.Where("type = ?", feedbackType)
+	}
+	if status, ok := filters["status"].(string); ok {
+		query = query.Where("status = ?", status)
+	}
+	if userID, ok := filters["user_id"].(uint); ok {
+		query = query.Where("user_id = ?", userID)
+	}
 
-    // Get total count
-    query.Count(&total)
+	query.Count(&total)
 
-    // Apply pagination
-    offset := (page - 1) * pageSize
-    err := query.
-        Order("created_at DESC").
-        Offset(offset).
-        Limit(pageSize).
-        Find(&feedbacks).Error
+	offset := (page - 1) * pageSize
+	err := query.
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&feedbacks).Error
 
-    return feedbacks, total, err
+	return feedbacks, total, err
 }
 
-// UpdateStatus updates the status of a feedback entry
 func (m *FeedbackModel) UpdateStatus(id uint, status FeedbackStatus) error {
 	return m.db.Model(&Feedback{}).
 		Where("id = ?", id).
 		Update("status", status).Error
 }
 
-// Delete removes a feedback entry
 func (m *FeedbackModel) Delete(id uint) error {
 	return m.db.Delete(&Feedback{}, id).Error
 }
 
-// GetByStatus retrieves all feedback entries with a specific status
 func (m *FeedbackModel) GetByStatus(status FeedbackStatus) ([]Feedback, error) {
 	var feedbacks []Feedback
 	if err := m.db.Where("status = ?", status).Find(&feedbacks).Error; err != nil {
@@ -171,7 +162,7 @@ func (m *FeedbackModel) UpdateStatusWithComment(id uint, status FeedbackStatus, 
 		// Append comment to details with timestamp
 		timestamp := time.Now().Format(time.RFC3339)
 		newDetails := fmt.Sprintf("%s\n[%s] Status changed to %s: %s",
-			feedback.Details, // Keep existing details
+			feedback.Details,
 			timestamp,
 			status,
 			comment,

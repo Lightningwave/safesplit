@@ -15,7 +15,7 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fmt.Printf("Starting auth middleware\n")
 		authHeader := c.GetHeader("Authorization")
-		fmt.Println("Authorization header:", authHeader) // Debug log
+		fmt.Println("Authorization header:", authHeader) 
 
 		if authHeader == "" {
 			fmt.Println("Missing Authorization header")
@@ -33,7 +33,7 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 		}
 
 		tokenStr := bearerToken[1]
-		fmt.Println("Token:", tokenStr) // Debug log
+		fmt.Println("Token:", tokenStr) 
 
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -72,7 +72,7 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 			return
 		}
 
-		fmt.Println("User ID from token claims:", uint(userID)) // Debug log
+		fmt.Println("User ID from token claims:", uint(userID)) 
 
 		user, err := userModel.FindByID(uint(userID))
 		if err != nil {
@@ -89,7 +89,6 @@ func AuthMiddleware(userModel *models.UserModel) gin.HandlerFunc {
 			return
 		}
 
-		// Set both "user" and "user_id" in context
 		fmt.Printf("Setting userID in context: %d\n", user.ID)
 		c.Set("user", user)
 		c.Set("user_id", user.ID)

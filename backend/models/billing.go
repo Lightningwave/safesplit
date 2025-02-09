@@ -78,18 +78,15 @@ func NewBillingModel(db *gorm.DB, userModel *UserModel) *BillingModel {
 // CreateBillingProfile creates a new billing profile for a user
 func (m *BillingModel) CreateBillingProfile(profile *BillingProfile) error {
     return m.db.Transaction(func(tx *gorm.DB) error {
-        // Check if user already has a billing profile
         var existingProfile BillingProfile
         if err := tx.Where("user_id = ?", profile.UserID).First(&existingProfile).Error; err == nil {
             return errors.New("user already has a billing profile")
         }
 
-        // Generate customer ID only if not provided
         if profile.CustomerID == "" {
             profile.CustomerID = fmt.Sprintf("CUST_%d_%s", profile.UserID, time.Now().Format("20060102"))
         }
 
-        // Create the billing profile
         if err := tx.Create(profile).Error; err != nil {
             return fmt.Errorf("failed to create billing profile: %v", err)
         }
@@ -98,7 +95,6 @@ func (m *BillingModel) CreateBillingProfile(profile *BillingProfile) error {
     })
 }
 
-// updateBillingProfile updates or creates a billing profile
 func (m *BillingModel) UpdateBillingProfile(profile *BillingProfile) error {
     return m.db.Transaction(func(tx *gorm.DB) error {
         updates := map[string]interface{}{
@@ -127,7 +123,6 @@ func (m *BillingModel) UpdateBillingProfile(profile *BillingProfile) error {
         return nil
     })
 }
-// GetUserBillingProfile retrieves a user's billing profile
 func (m *BillingModel) GetUserBillingProfile(userID uint) (*BillingProfile, error) {
 	var profile BillingProfile
 	if err := m.db.Where("user_id = ?", userID).First(&profile).Error; err != nil {
@@ -136,7 +131,6 @@ func (m *BillingModel) GetUserBillingProfile(userID uint) (*BillingProfile, erro
 	return &profile, nil
 }
 
-// GetUserWithBilling retrieves user and their billing information
 func (m *BillingModel) GetUserWithBilling(userID uint) (*UserBillingInfo, error) {
 	var info UserBillingInfo
 
@@ -155,7 +149,6 @@ func (m *BillingModel) GetUserWithBilling(userID uint) (*UserBillingInfo, error)
 	return &info, nil
 }
 
-// UpdateSubscriptionStatus updates subscription and billing status
 func (m *BillingModel) UpdateSubscriptionStatus(userID uint, status string) error {
 	return m.db.Transaction(func(tx *gorm.DB) error {
 		var user User
@@ -190,7 +183,6 @@ func (m *BillingModel) UpdateSubscriptionStatus(userID uint, status string) erro
 	})
 }
 
-// CancelSubscription cancels user's subscription
 func (m *BillingModel) CancelSubscription(userID uint) error {
     return m.db.Transaction(func(tx *gorm.DB) error {
         var user User
@@ -198,12 +190,10 @@ func (m *BillingModel) CancelSubscription(userID uint) error {
             return err
         }
 
-        // Check storage quota before scheduling downgrade
         if user.StorageUsed > DefaultStorageQuota {
             return ErrStorageExceedsQuota
         }
 
-        // Keep subscription active until next billing date
         var profile BillingProfile
         if err := tx.Where("user_id = ?", userID).First(&profile).Error; err != nil {
             return err
@@ -216,7 +206,6 @@ func (m *BillingModel) CancelSubscription(userID uint) error {
     })
 }
 
-// GetSubscriptionStats gets billing statistics
 func (m *BillingModel) GetSubscriptionStats() (map[string]interface{}, error) {
 	var stats map[string]interface{}
 
@@ -232,7 +221,6 @@ func (m *BillingModel) GetSubscriptionStats() (map[string]interface{}, error) {
 	return stats, err
 }
 
-// GetExpiringSubscriptions gets subscriptions expiring soon
 func (m *BillingModel) GetExpiringSubscriptions(days int) ([]BillingProfile, error) {
 	var profiles []BillingProfile
 	expiryDate := time.Now().AddDate(0, 0, days)
@@ -243,4 +231,3 @@ func (m *BillingModel) GetExpiringSubscriptions(days int) ([]BillingProfile, err
 
 	return profiles, err
 }
-
