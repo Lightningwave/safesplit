@@ -59,15 +59,10 @@ const ShareFileAction = ({ file, user }) => {
            }
 
            if (data.status === "success") {
-               const baseUrl = 'https://safesplit.xyz/';
-               const sharePath = isPremium 
-                   ? email ? '/protected-share/' : '/premium/share/'
-                   : email ? '/protected-share/' : '/share/';
-               const shareUrl = `${baseUrl}${sharePath}${data.data.raw_link}`;
-               setShareLink(shareUrl);
-           } else {
-               throw new Error(data.error || 'Failed to create share link');
-           }
+            setShareLink(data.data.share_link);
+        } else {
+            throw new Error(data.error || 'Failed to create share link');
+        }
 
        } catch (error) {
            setError(error.message);

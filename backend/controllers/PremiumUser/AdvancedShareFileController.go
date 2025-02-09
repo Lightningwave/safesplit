@@ -221,12 +221,14 @@ You have received a secure file share from %s.
 
 File: %s
 Access Link: %s
+Email: %s
+Password: %s
 
-This link requires a password and email verification to access.
+This link requires password and email verification to access. 
 Please use the same email address this message was sent to when accessing the file.
 
 Best regards,
-SafeSplit Team`, user.Username, file.OriginalName, shareURL)
+SafeSplit Team`, user.Username, file.OriginalName, shareURL, req.Email, req.Password)
 
 		if err := c.emailService.SendEmail(
 			req.Email,
