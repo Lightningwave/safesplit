@@ -210,7 +210,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	if req.ShareType == models.RecipientShare {
 		baseURL := os.Getenv("BASE_URL")
 		if baseURL == "" {
-			baseURL = "http://localhost:3000"
+			baseURL = "https://safesplit.xyz/"
 		}
 
 		shareURL := fmt.Sprintf("%s/protected-share/%s", baseURL, share.ShareLink)
@@ -248,7 +248,7 @@ SafeSplit Team`, user.Username, file.OriginalName, shareURL)
 
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
-		baseURL = "http://localhost:3000"
+		baseURL = "https://safesplit.xyz/"
 	}
 
 	// Determine share path based on type

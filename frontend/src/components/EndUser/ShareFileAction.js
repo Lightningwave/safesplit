@@ -59,7 +59,7 @@ const ShareFileAction = ({ file, user }) => {
            }
 
            if (data.status === "success") {
-               const baseUrl = 'http://localhost:3000';
+               const baseUrl = 'https://safesplit.xyz/';
                const sharePath = isPremium 
                    ? email ? '/protected-share/' : '/premium/share/'
                    : email ? '/protected-share/' : '/share/';
