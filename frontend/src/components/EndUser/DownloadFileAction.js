@@ -1,11 +1,8 @@
-import React, { useState } from 'react';
-import { Download, Loader } from 'lucide-react';
+import React from 'react';
+import { Download } from 'lucide-react';
 
 const DownloadFileAction = ({ file, selectedFiles = [], onClearSelection, onClose }) => {
-    const [isDownloading, setIsDownloading] = useState(false);
-
     const handleDownload = async () => {
-        setIsDownloading(true);
         try {
             const token = localStorage.getItem('token');
             const filesToDownload = selectedFiles.length > 0 ? selectedFiles : [file];
@@ -52,8 +49,6 @@ const DownloadFileAction = ({ file, selectedFiles = [], onClearSelection, onClos
                         console.error(`Error downloading file ${fileStatus.file_id}:`, error);
                     }
                 }
-
-                onClearSelection?.();
             } else {
                 const response = await fetch(`/api/files/${file.id}/download`, {
                     headers: {
@@ -73,27 +68,21 @@ const DownloadFileAction = ({ file, selectedFiles = [], onClearSelection, onClos
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
             }
-            
+
+            onClearSelection?.();
             onClose?.();
         } catch (error) {
             console.error('Download error:', error);
             alert(error.message || 'Failed to download file(s)');
-        } finally {
-            setIsDownloading(false);
         }
     };
 
     return (
         <button
             onClick={handleDownload}
-            disabled={isDownloading}
-            className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50"
+            className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2"
         >
-            {isDownloading ? (
-                <Loader size={16} className="animate-spin" />
-            ) : (
-                <Download size={16} />
-            )}
+            <Download size={16} />
             <span>
                 {selectedFiles.length > 0 
                     ? `Download ${selectedFiles.length} Files` 
