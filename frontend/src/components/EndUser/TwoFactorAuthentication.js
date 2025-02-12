@@ -3,12 +3,13 @@ import { Loader } from 'lucide-react';
 
 const TwoFactorAuthentication = () => {
   const [isEnabled, setIsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationMode, setVerificationMode] = useState(null);
   
   useEffect(() => {
     fetchTwoFactorStatus();
@@ -30,18 +31,16 @@ const TwoFactorAuthentication = () => {
       setIsEnabled(data.two_factor_enabled);
     } catch (err) {
       setError('Failed to fetch 2FA status');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleEnable2FA = async () => {
+  const initiateEnable2FA = async () => {
     setError('');
     setMessage('');
     setLoading(true);
     
     try {
-      const response = await fetch('http://localhost:8080/api/2fa/enable', {
+      const response = await fetch('http://localhost:8080/api/2fa/enable/initiate', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -52,10 +51,11 @@ const TwoFactorAuthentication = () => {
         throw new Error(await response.text());
       }
 
-      setIsEnabled(true);
-      setMessage('2FA has been enabled');
+      setVerificationMode('enable');
+      setShowVerification(true);
+      setMessage('Please check your email for the verification code');
     } catch (err) {
-      setError(err.message || 'Failed to enable 2FA');
+      setError(err.message || 'Failed to initiate 2FA enable');
     } finally {
       setLoading(false);
     }
@@ -78,6 +78,7 @@ const TwoFactorAuthentication = () => {
         throw new Error(await response.text());
       }
 
+      setVerificationMode('disable');
       setShowVerification(true);
       setMessage('Please check your email for the verification code');
     } catch (err) {
@@ -87,13 +88,17 @@ const TwoFactorAuthentication = () => {
     }
   };
 
-  const handleVerifyAndDisable = async () => {
+  const handleVerify = async () => {
     setError('');
     setMessage('');
     setIsVerifying(true);
     
+    const endpoint = verificationMode === 'enable' 
+      ? 'http://localhost:8080/api/2fa/enable/verify'
+      : 'http://localhost:8080/api/2fa/disable/verify';
+
     try {
-      const response = await fetch('http://localhost:8080/api/2fa/disable/verify', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -106,10 +111,11 @@ const TwoFactorAuthentication = () => {
         throw new Error(await response.text());
       }
 
-      setIsEnabled(false);
+      setIsEnabled(verificationMode === 'enable');
       setShowVerification(false);
       setVerificationCode('');
-      setMessage('2FA has been disabled');
+      setVerificationMode(null);
+      setMessage(`2FA has been ${verificationMode === 'enable' ? 'enabled' : 'disabled'}`);
     } catch (err) {
       setError(err.message || 'Invalid verification code');
     } finally {
@@ -120,18 +126,10 @@ const TwoFactorAuthentication = () => {
   const handleCancel = () => {
     setShowVerification(false);
     setVerificationCode('');
+    setVerificationMode(null);
     setError('');
     setMessage('');
   };
-
-  if (loading && !isEnabled && !error) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader className="animate-spin mr-2" />
-        <span>Loading 2FA status...</span>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -174,12 +172,18 @@ const TwoFactorAuthentication = () => {
             </div>
             <div className="flex space-x-4">
               <button
-                onClick={handleVerifyAndDisable}
+                onClick={handleVerify}
                 disabled={isVerifying || !verificationCode}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+                className={`px-4 py-2 text-white rounded disabled:opacity-50 flex items-center space-x-2 ${
+                  verificationMode === 'enable' 
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
                 {isVerifying && <Loader size={16} className="animate-spin" />}
-                <span>Verify and Disable 2FA</span>
+                <span>
+                  Verify and {verificationMode === 'enable' ? 'Enable' : 'Disable'} 2FA
+                </span>
               </button>
               <button
                 onClick={handleCancel}
@@ -191,7 +195,7 @@ const TwoFactorAuthentication = () => {
           </div>
         ) : (
           <button
-            onClick={isEnabled ? initiateDisable2FA : handleEnable2FA}
+            onClick={isEnabled ? initiateDisable2FA : initiateEnable2FA}
             disabled={loading}
             className={`px-4 py-2 rounded transition-colors flex items-center space-x-2 ${
               isEnabled 

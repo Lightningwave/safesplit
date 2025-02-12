@@ -185,7 +185,8 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	twoFactor := protected.Group("/2fa")
 	{
 		twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
-		twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
+		twoFactor.POST("/enable/initiate", handlers.TwoFactorController.InitiateEnable2FA)
+		twoFactor.POST("/enable/verify", handlers.TwoFactorController.VerifyAndEnable2FA)
 		twoFactor.POST("/disable/initiate", handlers.TwoFactorController.InitiateDisable2FA)
 		twoFactor.POST("/disable/verify", handlers.TwoFactorController.VerifyAndDisable2FA)
 	}
