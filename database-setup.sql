@@ -38,7 +38,7 @@ CREATE TABLE users (
 CREATE TABLE server_master_keys (
     id INT AUTO_INCREMENT PRIMARY KEY,
     key_id VARCHAR(64) NOT NULL UNIQUE,           -- Unique identifier for the key
-    encrypted_key BINARY(64) NOT NULL,            -- Encrypted server master key
+    encrypted_key BINARY(32) NOT NULL,            -- Encrypted server master key
     key_nonce BINARY(16) NOT NULL,               -- Nonce for key encryption
     is_active BOOLEAN DEFAULT TRUE,              -- Whether this is the current active key
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -176,16 +176,6 @@ CREATE TABLE file_shares (
     FOREIGN KEY (shared_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Share access logs table
-CREATE TABLE share_access_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    share_id INT NOT NULL,                        -- Associated share
-    ip_address VARCHAR(45) NOT NULL,              -- Access IP
-    access_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('success', 'failed') NOT NULL,    -- Access result
-    failure_reason VARCHAR(255),                  -- Failure reason
-    FOREIGN KEY (share_id) REFERENCES file_shares(id) ON DELETE CASCADE
-);
 
 -- Activity logs table
 CREATE TABLE activity_logs (
@@ -216,19 +206,7 @@ CREATE TABLE subscription_plans (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- User subscriptions table
-CREATE TABLE user_subscriptions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,                         -- Subscribed user
-    plan_id INT NOT NULL,                         -- Selected plan
-    start_date TIMESTAMP NOT NULL,                -- Subscription start
-    end_date TIMESTAMP NOT NULL,                  -- Subscription end
-    status ENUM('active', 'cancelled', 'expired') NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id)
-);
+
 
 -- Feedback table
 CREATE TABLE feedbacks (
