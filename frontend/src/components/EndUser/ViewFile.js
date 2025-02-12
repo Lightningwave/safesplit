@@ -338,6 +338,7 @@ const ViewFile = ({
                                             selected={selectedFiles.has(file.id)}
                                             onSelect={() => handleFileSelection(file.id)}
                                             selectedFiles={getSelectedFiles()}
+                                            onClearSelection={() => setSelectedFiles(new Set())}
                                         />
                                     </div>
                                 )}

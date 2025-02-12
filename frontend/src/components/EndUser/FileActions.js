@@ -7,7 +7,17 @@ import ArchiveFileAction from './ArchiveFileAction';
 import UnarchiveFileAction from './UnarchiveFileAction';
 import ReportFileAction from './ReportFileAction';
 
-const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, selected = false, onSelect, selectedFiles = [] }) => {
+const FileActions = ({ 
+    file, 
+    user, 
+    onRefresh, 
+    onAction, 
+    isSelectable = false, 
+    selected = false, 
+    onSelect, 
+    selectedFiles = [],
+    onClearSelection
+}) => {
     const [showActions, setShowActions] = useState(false);
     const actionsRef = useRef(null);
 
@@ -32,6 +42,10 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
         } else {
             setShowActions(!showActions);
         }
+    };
+
+    const handleClose = () => {
+        setShowActions(false);
     };
 
     const allFilesArchived = selectedFiles.length > 0 
@@ -59,27 +73,42 @@ const FileActions = ({ file, user, onRefresh, onAction, isSelectable = false, se
                     <DownloadFileAction 
                         file={file} 
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
+                        onClearSelection={onClearSelection}
+                        onClose={handleClose}
                     />
-                    <ShareFileAction file={file} user={user} />
+                    <ShareFileAction 
+                        file={file} 
+                        user={user} 
+                        onClose={handleClose}
+                    />
                     {allFilesArchived ? (
                         <UnarchiveFileAction 
                             file={file} 
                             selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                             onRefresh={onRefresh}
+                            onClearSelection={onClearSelection}
+                            onClose={handleClose}
                         />
                     ) : (
                         <ArchiveFileAction 
                             file={file} 
                             selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
                             onRefresh={onRefresh}
+                            onClearSelection={onClearSelection}
+                            onClose={handleClose}
                         />
                     )}
                     <DeleteFileAction 
                         file={file} 
                         selectedFiles={selectedFiles.length > 1 ? selectedFiles : []}
-                        onRefresh={onRefresh} 
+                        onRefresh={onRefresh}
+                        onClearSelection={onClearSelection}
+                        onClose={handleClose}
                     />
-                    <ReportFileAction file={file} />
+                    <ReportFileAction 
+                        file={file}
+                        onClose={handleClose}
+                    />
                 </div>
             )}
         </div>

@@ -1,13 +1,15 @@
-import React from 'react';
-import { Download } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Loader } from 'lucide-react';
 
-const DownloadFileAction = ({ file, selectedFiles = [] }) => {
+const DownloadFileAction = ({ file, selectedFiles = [], onClearSelection, onClose }) => {
+    const [isDownloading, setIsDownloading] = useState(false);
+
     const handleDownload = async () => {
+        setIsDownloading(true);
         try {
             const token = localStorage.getItem('token');
             const filesToDownload = selectedFiles.length > 0 ? selectedFiles : [file];
 
-            // If multiple files selected, get download status first
             if (selectedFiles.length > 0) {
                 const statusResponse = await fetch('/api/files/mass-download', {
                     method: 'POST',
@@ -27,7 +29,6 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
                     result => result.status === 'success'
                 );
 
-                // Download each available file
                 for (const fileStatus of availableFiles) {
                     try {
                         const response = await fetch(`/api/files/mass-download/${fileStatus.file_id}`, {
@@ -51,8 +52,9 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
                         console.error(`Error downloading file ${fileStatus.file_id}:`, error);
                     }
                 }
+
+                onClearSelection?.();
             } else {
-                // Single file download
                 const response = await fetch(`/api/files/${file.id}/download`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -71,17 +73,27 @@ const DownloadFileAction = ({ file, selectedFiles = [] }) => {
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
             }
+            
+            onClose?.();
         } catch (error) {
             console.error('Download error:', error);
+            alert(error.message || 'Failed to download file(s)');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
     return (
         <button
             onClick={handleDownload}
-            className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2"
+            disabled={isDownloading}
+            className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50"
         >
-            <Download size={16} />
+            {isDownloading ? (
+                <Loader size={16} className="animate-spin" />
+            ) : (
+                <Download size={16} />
+            )}
             <span>
                 {selectedFiles.length > 0 
                     ? `Download ${selectedFiles.length} Files` 

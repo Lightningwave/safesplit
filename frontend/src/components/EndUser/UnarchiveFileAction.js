@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Archive, Loader } from 'lucide-react';
 
-const UnarchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
+const UnarchiveFileAction = ({ file, selectedFiles = [], onRefresh, onClearSelection, onClose }) => {
     const [isUnarchiving, setIsUnarchiving] = useState(false);
 
     const handleUnarchive = async () => {
@@ -49,6 +49,8 @@ const UnarchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
                 }
             }
 
+            onClearSelection?.();
+            onClose?.();
             onRefresh?.();
         } catch (error) {
             console.error('Unarchive error:', error);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Archive, Loader } from 'lucide-react';
 
-const ArchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
+const ArchiveFileAction = ({ file, selectedFiles = [], onRefresh, onClearSelection }) => {
     const [isArchiving, setIsArchiving] = useState(false);
 
     const handleArchive = async () => {
@@ -49,6 +49,7 @@ const ArchiveFileAction = ({ file, selectedFiles = [], onRefresh }) => {
                 }
             }
 
+            onClearSelection?.();
             onRefresh?.();
         } catch (error) {
             console.error('Archive error:', error);

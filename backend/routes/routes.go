@@ -98,7 +98,7 @@ func NewRouteHandlers(
 		LoginController:           controllers.NewLoginController(userModel, billingModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
-		TwoFactorController:       EndUser.NewTwoFactorController(userModel),
+		TwoFactorController:       EndUser.NewTwoFactorController(userModel, twoFactorService),
 		SuperAdminHandlers: &SuperAdminHandlers{
 			LoginController:          superAdminLoginController,
 			CreateSysAdminController: SuperAdmin.NewCreateSysAdminController(userModel),
@@ -184,9 +184,11 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	// 2FA routes
 	twoFactor := protected.Group("/2fa")
 	{
-		twoFactor.POST("/enable", handlers.TwoFactorController.EnableEmailTwoFactor)
-		twoFactor.POST("/disable", handlers.TwoFactorController.DisableEmailTwoFactor)
 		twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
+		twoFactor.POST("/enable/initiate", handlers.TwoFactorController.InitiateEnable2FA)
+		twoFactor.POST("/enable/verify", handlers.TwoFactorController.VerifyAndEnable2FA)
+		twoFactor.POST("/disable/initiate", handlers.TwoFactorController.InitiateDisable2FA)
+		twoFactor.POST("/disable/verify", handlers.TwoFactorController.VerifyAndDisable2FA)
 	}
 
 	// End User routes should be first as they're most commonly accessed

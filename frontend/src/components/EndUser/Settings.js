@@ -96,7 +96,7 @@ const Settings = ({ user: initialUser, onUserUpdate }) => {
             <div className="space-y-3">
                 <p><strong>Username:</strong> {currentUser.username}</p>
                 <p><strong>Email:</strong> {currentUser.email}</p>
-                <p><strong>Subscription Plan:</strong> {currentUser.subscription_status || 'free'}</p>
+                <p><strong>Subscription Plan:</strong> {currentUser.subscription_status}</p>
                 
                 {/* Only show billing details if billing profile exists */}
                 {billingProfile && (

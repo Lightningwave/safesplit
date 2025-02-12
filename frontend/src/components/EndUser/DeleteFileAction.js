@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, Loader } from 'lucide-react';
 
-const DeleteFileAction = ({ file, selectedFiles = [], onRefresh }) => {
+const DeleteFileAction = ({ file, selectedFiles = [], onRefresh, onClearSelection }) => {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDelete = async () => {
@@ -37,6 +37,7 @@ const DeleteFileAction = ({ file, selectedFiles = [], onRefresh }) => {
                 if (!response.ok) throw new Error('Failed to delete files');
             }
 
+            onClearSelection?.();
             onRefresh?.();
         } catch (error) {
             console.error('Delete error:', error);
