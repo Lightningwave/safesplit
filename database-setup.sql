@@ -38,7 +38,7 @@ CREATE TABLE users (
 CREATE TABLE server_master_keys (
     id INT AUTO_INCREMENT PRIMARY KEY,
     key_id VARCHAR(64) NOT NULL UNIQUE,           -- Unique identifier for the key
-    encrypted_key BINARY(64) NOT NULL,            -- Encrypted server master key
+    encrypted_key BINARY(32) NOT NULL,            -- Encrypted server master key
     key_nonce BINARY(16) NOT NULL,               -- Nonce for key encryption
     is_active BOOLEAN DEFAULT TRUE,              -- Whether this is the current active key
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
