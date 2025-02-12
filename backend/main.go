@@ -184,7 +184,7 @@ func main() {
 
 	// Configure CORS settings for secure cross-origin requests
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = []string{"https://safesplit.xyz/", "http://35.202.178.170"}
+	corsConfig.AllowOrigins = []string{"https://safesplit.xyz/", "http://35.222.216.105"}
 	corsConfig.AllowCredentials = true
 	corsConfig.AllowHeaders = []string{
 		"Origin",
