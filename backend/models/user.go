@@ -8,6 +8,7 @@ import (
 	"safesplit/utils"
 	"strconv"
 	"time"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -145,34 +146,40 @@ func (m *UserModel) Create(user *User) (*User, error) {
 
 // Authenticate checks the provided email and password
 func (m *UserModel) Authenticate(email, password string) (*User, error) {
-	var user User
-	if err := m.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error; err != nil {
-		return nil, errors.New("invalid credentials")
-	}
+    var user User
+    if err := m.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error; err != nil {
+        return nil, errors.New("invalid credentials")
+    }
 
-	// Prevent super admin login through regular endpoint
-	if user.Role == RoleSuperAdmin {
-		return nil, errors.New("please use super admin login portal")
-	}
+    // Prevent super admin login through regular endpoint
+    if user.Role == RoleSuperAdmin {
+        return nil, errors.New("please use super admin login portal")
+    }
 
-	// Check if account is locked
-	if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
-		return nil, fmt.Errorf("account locked until %v", user.AccountLockedUntil)
-	}
+    // Check if account is locked
+    if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
+        remainingTime := user.AccountLockedUntil.Sub(time.Now())
+        return nil, fmt.Errorf("account locked for %d minutes due to too many failed attempts", int(remainingTime.Minutes()))
+    }
 
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		if err := m.handleFailedLogin(&user); err != nil {
-			return nil, err
-		}
-		return nil, errors.New("invalid credentials")
-	}
+    // Verify password
+    if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+        lockErr := m.handleFailedLogin(&user)
+        if lockErr != nil && strings.Contains(lockErr.Error(), "account locked") {
+            return nil, lockErr
+        }
+        remainingAttempts := 5 - user.FailedLoginAttempts
+        if remainingAttempts > 0 {
+            return nil, fmt.Errorf("invalid credentials - %d attempts remaining", remainingAttempts)
+        }
+        return nil, errors.New("invalid credentials")
+    }
 
-	if user.Role == RoleSysAdmin || user.TwoFactorEnabled {
-		return &user, nil
-	}
+    if user.Role == RoleSysAdmin || user.TwoFactorEnabled {
+        return &user, nil
+    }
 
-	return m.handleSuccessfulLogin(&user)
+    return m.handleSuccessfulLogin(&user)
 }
 
 // handleSuccessfulLogin updates user state after successful login
@@ -191,14 +198,24 @@ func (m *UserModel) handleSuccessfulLogin(user *User) (*User, error) {
 
 // handleFailedLogin manages failed login attempts and account lockout
 func (m *UserModel) handleFailedLogin(user *User) error {
-	user.FailedLoginAttempts++
+    user.FailedLoginAttempts++
 
-	if user.FailedLoginAttempts >= 5 {
-		lockTime := time.Now().Add(30 * time.Minute)
-		user.AccountLockedUntil = &lockTime
-	}
+    var lockTime *time.Time
+    if user.FailedLoginAttempts >= 5 {
+        t := time.Now().Add(30 * time.Minute)
+        lockTime = &t
+        user.AccountLockedUntil = lockTime
+    }
 
-	return m.db.Save(user).Error
+    if err := m.db.Save(user).Error; err != nil {
+        return fmt.Errorf("failed to update login attempts: %w", err)
+    }
+
+    if lockTime != nil {
+        return fmt.Errorf("account locked until %v due to too many failed attempts", lockTime)
+    }
+
+    return nil
 }
 
 // UpdateMasterKey updates the user's master key material
@@ -232,40 +249,6 @@ func (u *User) UpdateMasterKey(db *gorm.DB, newEncryptedKey []byte) error {
 	u.KeyLastRotated = &now
 
 	return nil
-}
-
-// RotateMasterKey performs a key rotation operation
-func (m *UserModel) RotateMasterKey(userID uint, newEncryptedKey []byte, rotationType RotationType, keyRotationModel *KeyRotationModel) error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		// Get user and verify existence
-		var user User
-		if err := tx.First(&user, userID).Error; err != nil {
-			return fmt.Errorf("user not found: %w", err)
-		}
-
-		// Verify rotation type is valid
-		switch rotationType {
-		case RotationTypeAutomatic, RotationTypeManual, RotationTypeForced:
-			// Valid rotation type
-		default:
-			return fmt.Errorf("invalid rotation type: %s", rotationType)
-		}
-
-		// Store old version for logging
-		oldVersion := user.MasterKeyVersion
-
-		// Update the master key
-		if err := user.UpdateMasterKey(tx, newEncryptedKey); err != nil {
-			return fmt.Errorf("failed to update master key: %w", err)
-		}
-
-		// Log the rotation using the KeyRotationModel
-		if err := keyRotationModel.LogRotation(userID, oldVersion, user.MasterKeyVersion, rotationType); err != nil {
-			return fmt.Errorf("failed to log rotation: %w", err)
-		}
-
-		return nil
-	})
 }
 
 func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error) {
@@ -347,61 +330,6 @@ func (u *User) UpdateSubscription(db *gorm.DB, status string) error {
 		u.Role = RoleEndUser
 	}
 	return db.Save(u).Error
-}
-
-// ResetPassword updates the user's password and optionally rotates master key
-func (m *UserModel) ResetPassword(userID uint, currentPassword, newPassword string, newEncryptedMasterKey []byte, passwordHistoryModel *PasswordHistoryModel) error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		var user User
-		if err := tx.First(&user, userID).Error; err != nil {
-			return errors.New("user not found")
-		}
-
-		// Verify current password
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
-			return errors.New("current password is incorrect")
-		}
-
-		// Store the old password in history
-		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
-			return err
-		}
-
-		// Update password and related fields
-		now := time.Now()
-		updates := map[string]interface{}{
-			"password":              string(newPassword),
-			"last_password_change":  now,
-			"force_password_change": false,
-		}
-
-		// Update master key if provided
-		if newEncryptedMasterKey != nil && len(newEncryptedMasterKey) > 0 {
-			nonce, err := utils.GenerateNonce()
-			if err != nil {
-				return err
-			}
-
-			updates["encrypted_master_key"] = newEncryptedMasterKey
-			updates["master_key_nonce"] = nonce
-			updates["master_key_version"] = user.MasterKeyVersion + 1
-			updates["key_last_rotated"] = now
-
-			// Log key rotation
-			rotation := KeyRotationHistory{
-				UserID:        userID,
-				OldKeyVersion: user.MasterKeyVersion,
-				NewKeyVersion: user.MasterKeyVersion + 1,
-				RotationType:  RotationTypeAutomatic,
-			}
-
-			if err := tx.Create(&rotation).Error; err != nil {
-				return fmt.Errorf("failed to log key rotation: %w", err)
-			}
-		}
-
-		return tx.Model(&user).Updates(updates).Error
-	})
 }
 
 // Create Sys admin account
@@ -776,6 +704,31 @@ func (m *UserModel) ResetPasswordWithFragments(
 			return fmt.Errorf("current password is incorrect")
 		}
 
+		// Hash new password FIRST to check for reuse
+		hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash new password: %w", err)
+		}
+
+		// Check if the new password matches any of the recent passwords
+		recentPasswords, err := passwordHistoryModel.GetRecentPasswords(userID, 5)
+		if err != nil {
+			return fmt.Errorf("failed to check password history: %w", err)
+		}
+
+		// Compare new password hash with recent password hashes
+		for _, oldHash := range recentPasswords {
+			if err := bcrypt.CompareHashAndPassword([]byte(oldHash), []byte(newPassword)); err == nil {
+				// If CompareHashAndPassword returns nil, the password matches
+				return errors.New("Cannot reuse any of your last 5 passwords")
+			}
+		}
+
+		// Store current password in history BEFORE updating to new one
+		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+			return fmt.Errorf("failed to store password history: %w", err)
+		}
+
 		// Get original encrypted master key
 		originalEncryptedKey := user.EncryptedMasterKey
 		log.Printf("Current encrypted master key: %x", originalEncryptedKey)
@@ -792,12 +745,7 @@ func (m *UserModel) ResetPasswordWithFragments(
 			return fmt.Errorf("failed to decrypt master key: %w", err)
 		}
 
-		// Hash new password and derive new KEK
-		hashedNewPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("failed to hash new password: %w", err)
-		}
-
+		// Derive new KEK using already hashed password
 		newKEK, err := services.DeriveKeyEncryptionKey(string(hashedNewPassword), user.MasterKeySalt)
 		if err != nil {
 			return fmt.Errorf("failed to derive new KEK: %w", err)
@@ -817,6 +765,11 @@ func (m *UserModel) ResetPasswordWithFragments(
 
 		log.Printf("New encrypted master key: %x", newEncryptedMasterKey)
 
+		// Store old password in history BEFORE updating
+		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
+			return fmt.Errorf("failed to store password history: %w", err)
+		}
+
 		// Process fragments
 		files, err := fileModel.ListAllUserFiles(userID)
 		if err != nil {
@@ -829,17 +782,15 @@ func (m *UserModel) ResetPasswordWithFragments(
 		for _, file := range files {
 			fragments, err := keyFragmentModel.GetUserFragmentsForFile(file.ID)
 			if err != nil {
+				if err.Error() == "record not found" {
+					log.Printf("Warning: skipping missing fragments for file %d", file.ID)
+					continue
+				}
 				return fmt.Errorf("failed to get key fragments for file %d: %w", file.ID, err)
 			}
 
 			for _, fragment := range fragments {
 				log.Printf("Processing fragment %d for file %d", fragment.FragmentIndex, file.ID)
-				log.Printf("Fragment data before decryption: %x", fragment.Data)
-				log.Printf("Fragment nonce: %x", fragment.EncryptionNonce)
-
-				if fragment.MasterKeyVersion != nil {
-					log.Printf("Fragment key version: %d", *fragment.MasterKeyVersion)
-				}
 
 				// Decrypt fragment with current decrypted master key
 				decryptedFragment, err := services.DecryptMasterKey(
@@ -848,11 +799,10 @@ func (m *UserModel) ResetPasswordWithFragments(
 					fragment.EncryptionNonce,
 				)
 				if err != nil {
-					return fmt.Errorf("failed to decrypt fragment %d for file %d: %w",
+					log.Printf("Warning: skipping unreadable fragment %d for file %d: %v",
 						fragment.FragmentIndex, file.ID, err)
+					continue
 				}
-
-				log.Printf("Successfully decrypted fragment: %x", decryptedFragment)
 
 				// Generate new nonce for fragment
 				newFragmentNonce, err := utils.GenerateNonce()
@@ -869,8 +819,6 @@ func (m *UserModel) ResetPasswordWithFragments(
 				if err != nil {
 					return fmt.Errorf("failed to re-encrypt fragment: %w", err)
 				}
-
-				log.Printf("Re-encrypted fragment result: %x", newEncryptedFragment)
 
 				// Store re-encrypted fragment
 				if err := keyFragmentModel.storage.StoreFragment(
@@ -889,18 +837,9 @@ func (m *UserModel) ResetPasswordWithFragments(
 				}).Error; err != nil {
 					return fmt.Errorf("failed to update fragment metadata: %w", err)
 				}
-
-				log.Printf("Successfully updated fragment %d for file %d to version %d",
-					fragment.FragmentIndex, file.ID, newVersion)
 			}
 		}
 
-		// Store password history
-		if err := passwordHistoryModel.AddEntry(user.ID, user.Password); err != nil {
-			return fmt.Errorf("failed to store password history: %w", err)
-		}
-
-		// Update user record
 		now := time.Now()
 		updates := map[string]interface{}{
 			"password":              string(hashedNewPassword),

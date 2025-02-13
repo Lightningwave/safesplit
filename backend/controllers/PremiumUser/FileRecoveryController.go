@@ -20,7 +20,6 @@ func NewFileRecoveryController(fileModel *models.FileModel) *FileRecoveryControl
 
 // RecoverFile handles the recovery of a deleted file for premium users
 func (c *FileRecoveryController) RecoverFile(ctx *gin.Context) {
-	// Get authenticated user
 	user, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
@@ -76,7 +75,6 @@ func (c *FileRecoveryController) RecoverFile(ctx *gin.Context) {
 
 // ListRecoverableFiles returns a list of files that can be recovered
 func (c *FileRecoveryController) ListRecoverableFiles(ctx *gin.Context) {
-	// Get authenticated user
 	user, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
@@ -114,7 +112,6 @@ func (c *FileRecoveryController) ListRecoverableFiles(ctx *gin.Context) {
 		return
 	}
 
-	// Format response
 	var response []gin.H
 	for _, file := range files {
 		response = append(response, gin.H{

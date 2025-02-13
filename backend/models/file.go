@@ -123,26 +123,25 @@ func (m *FileModel) CreateFileWithShards(
 	serverKeyModel *ServerMasterKeyModel,
 ) error {
 	return withTransactionRetry(m.db, 3, func(tx *gorm.DB) error {
-		// 1. Create file record
+		// 1. Update user storage first to lock the user row
+		if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
+			return fmt.Errorf("failed to update storage usage: %w", err)
+		}
+
+		// 2. Create file record
 		if err := m.CreateFile(tx, file); err != nil {
 			return fmt.Errorf("failed to create file record: %w", err)
 		}
 
-		// 2. Store shards
+		// 3. Store shards
 		if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
 			return fmt.Errorf("failed to store shards: %w", err)
 		}
 
-		// 3. Save key fragments
+		// 4. Save key fragments
 		if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
 			m.rsService.DeleteShards(file.ID) // clean up
 			return fmt.Errorf("failed to save key fragments: %w", err)
-		}
-
-		// 4. Update user storage
-		if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
-			m.rsService.DeleteShards(file.ID)
-			return fmt.Errorf("failed to update storage usage: %w", err)
 		}
 
 		// 5. Log activity
@@ -159,7 +158,6 @@ func (m *FileModel) CreateFileWithShards(
 			return fmt.Errorf("failed to log activity: %w", err)
 		}
 
-		// If everything succeeded, return nil
 		return nil
 	})
 }
@@ -609,7 +607,6 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 
 	log.Printf("Starting file recovery process - File ID: %d, User ID: %d", fileID, userID)
 
-	// Get the deleted file
 	var file File
 	if err := tx.Where("id = ? AND user_id = ? AND is_deleted = ?", fileID, userID, true).First(&file).Error; err != nil {
 		tx.Rollback()
@@ -620,7 +617,6 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	log.Printf("Found deleted file - ID: %d, IsSharded: %v, Size: %d bytes",
 		file.ID, file.IsSharded, file.Size)
 
-	// Verify storage space
 	usedStorage, quota, err := m.GetUserStorageInfo(userID)
 	if err != nil {
 		tx.Rollback()
@@ -635,10 +631,8 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 		return fmt.Errorf("insufficient storage space for recovery")
 	}
 
-	// Verify file data
 	if file.IsSharded {
 		log.Printf("Verifying shards for file %d", file.ID)
-		// Check shards integrity
 		fileShards, err := m.rsService.RetrieveShards(file.ID, int(file.DataShardCount+file.ParityShardCount))
 		if err != nil {
 			tx.Rollback()
@@ -737,11 +731,11 @@ func (f *File) ValidateIVSize() error {
 	var expectedSize int
 	switch f.EncryptionType {
 	case services.ChaCha20:
-		expectedSize = 24 // XChaCha20-Poly1305
+		expectedSize = 24 
 	case services.Twofish:
-		expectedSize = 12 // Twofish-GCM
+		expectedSize = 12 
 	case services.StandardEncryption:
-		expectedSize = 16 // AES-GCM
+		expectedSize = 16 
 	default:
 		return fmt.Errorf("unsupported encryption type: %s", f.EncryptionType)
 	}
@@ -857,7 +851,6 @@ func (m *FileModel) CleanupOldDeletedFiles(retentionDays int) error {
         log.Printf("Cleaning up old deleted file - ID: %d, DeletedAt: %v", file.ID, file.DeletedAt)
         if err := m.PermanentlyDeleteFile(file.ID, file.UserID, "system"); err != nil {
             log.Printf("Failed to cleanup file %d: %v", file.ID, err)
-            // Continue with other files even if one fails
             continue
         }
     }

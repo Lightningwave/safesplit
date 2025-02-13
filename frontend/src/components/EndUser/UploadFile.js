@@ -52,7 +52,7 @@ const UploadFile = ({ isOpen, onClose, onUpload, currentFolder }) => {
 
     const handleDrop = useCallback((event) => {
         event.preventDefault();
-        const file = event.dataTransfer.files[0]; // Take only the first file
+        const file = event.dataTransfer.files[0]; 
         setSelectedFile(file);
         setError('');
     }, []);

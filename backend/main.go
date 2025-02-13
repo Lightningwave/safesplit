@@ -109,7 +109,6 @@ func main() {
 	folderModel := models.NewFolderModel(db)
 	fileShareModel := models.NewFileShareModel(db)
 	keyFragmentModel := models.NewKeyFragmentModel(db, storageService)
-	keyRotationModel := models.NewKeyRotationModel(db)
 	feedbackModel := models.NewFeedbackModel(db)
 
 	// Initialize core services
@@ -168,7 +167,6 @@ func main() {
 		folderModel,
 		fileShareModel,
 		keyFragmentModel,
-		keyRotationModel,
 		serverMasterKeyModel,
 		feedbackModel,
 		encryptionService,

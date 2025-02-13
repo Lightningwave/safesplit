@@ -49,7 +49,6 @@ type EndUserHandlers struct {
 	FeedbackController       *EndUser.FeedbackController
 }
 type PremiumUserHandlers struct {
-	FragmentController          *PremiumUser.FragmentController
 	FileRecoveryController      *PremiumUser.FileRecoveryController
 	AdvancedShareFileController *PremiumUser.ShareFileController
 }
@@ -83,7 +82,6 @@ func NewRouteHandlers(
 	folderModel *models.FolderModel,
 	fileShareModel *models.FileShareModel,
 	keyFragmentModel *models.KeyFragmentModel,
-	keyRotationModel *models.KeyRotationModel,
 	serverMasterKeyModel *models.ServerMasterKeyModel,
 	feedbackModel *models.FeedbackModel,
 	encryptionService *services.EncryptionService,
@@ -132,7 +130,7 @@ func NewRouteHandlers(
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel, keyFragmentModel, fileModel),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyFragmentModel, fileModel),
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
@@ -140,7 +138,6 @@ func NewRouteHandlers(
 			FeedbackController:       EndUser.NewFeedbackController(feedbackModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
-			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
 			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel, twoFactorService, emailService, compressionService),
 		},
@@ -262,11 +259,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
-	// Fragment management routes
-	fragments := premium.Group("/fragments")
-	{
-		fragments.GET("/files/:fileId", handlers.FragmentController.GetUserFragments)
-	}
+	
 	recovery := premium.Group("/recovery")
 	{
 		recovery.GET("/files", handlers.FileRecoveryController.ListRecoverableFiles)
