@@ -19,11 +19,9 @@ func NewSystemLogsController(activityLogModel *models.ActivityLogModel) *SystemL
 }
 
 func (c *SystemLogsController) GetSystemLogs(ctx *gin.Context) {
-	// Parse query parameters
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("pageSize", "10"))
 
-	// Build filters from query parameters
 	filters := make(map[string]interface{})
 	if timestamp := ctx.Query("timestamp"); timestamp != "" {
 		filters["timestamp"] = timestamp
@@ -40,7 +38,6 @@ func (c *SystemLogsController) GetSystemLogs(ctx *gin.Context) {
 		}
 	}
 
-	// Get logs with pagination
 	logs, total, err := c.activityLogModel.GetSystemLogs(filters, page, pageSize)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch system logs"})

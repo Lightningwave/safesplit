@@ -31,16 +31,13 @@ func (c *LoginController) Login(ctx *gin.Context) {
 		return
 	}
 
-	// First authenticate super admin credentials
 	user, err := c.userModel.AuthenticateSuperAdmin(loginReq.Email, loginReq.Password)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid super admin credentials"})
 		return
 	}
 
-	// Always require 2FA for super admin
 	if loginReq.TwoFactorCode == "" {
-		// Initiate 2FA if code not provided
 		if err := c.userModel.InitiateEmailTwoFactor(user.ID); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to send 2FA code",
@@ -56,20 +53,17 @@ func (c *LoginController) Login(ctx *gin.Context) {
 		return
 	}
 
-	// Verify 2FA code
 	if err := c.userModel.VerifyEmailTwoFactor(user.ID, loginReq.TwoFactorCode); err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA code"})
 		return
 	}
 
-	// Generate token after successful 2FA
 	token, err := config.GenerateToken(user.ID, user.Role)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
 		return
 	}
 
-	// Clear sensitive data
 	user.Password = ""
 
 	ctx.JSON(http.StatusOK, gin.H{
@@ -89,13 +83,12 @@ func (c *LoginController) GetMe(ctx *gin.Context) {
 		return
 	}
 
-	// Verify super admin role
 	if !user.IsSuperAdmin() {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
 
-	user.Password = "" // Clear sensitive data
+	user.Password = "" 
 	ctx.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
 			"user": user,
