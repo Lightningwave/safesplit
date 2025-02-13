@@ -56,30 +56,12 @@ export const login = async (email, password, twoFactorCode = '') => {
                 user_id: data.user_id
             };
         }
-        
-        if (response.status === 429) {
-            throw {
-                response: {
-                    status: 429,
-                    data: {
-                        error: data.error,
-                        status: 'locked',
-                        locked_until: data.locked_until,
-                        remaining_minutes: data.remaining_minutes
-                    }
-                }
-            };
-        }
 
         if (!response.ok) {
             throw {
                 response: {
                     status: response.status,
-                    data: {
-                        error: data.error,
-                        status: data.status,
-                        remaining_attempts: data.remaining_attempts
-                    }
+                    data: data
                 }
             };
         }
@@ -89,14 +71,17 @@ export const login = async (email, password, twoFactorCode = '') => {
         if (data.data.billing_profile) {
             localStorage.setItem('billing', JSON.stringify(data.data.billing_profile));
         }
-        
-        return data.data;
+
+        return {
+            user: data.data.user,
+            billing_profile: data.data.billing_profile
+        };
     } catch (error) {
         console.error('Login error:', error);
-        throw error.response ? error : { 
-            response: { 
-                data: { error: error.message || 'Login failed' } 
-            } 
+        throw error.response ? error : {
+            response: {
+                data: { error: error.message || 'Login failed' }
+            }
         };
     }
 };

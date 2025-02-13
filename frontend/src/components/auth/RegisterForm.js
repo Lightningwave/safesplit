@@ -34,7 +34,6 @@ function RegisterForm() {
     setError('');
     setIsLoading(true);
 
-    // Enhanced validation
     if (!formData.username || !formData.email || !formData.password) {
       setError('Please fill in all fields');
       setIsLoading(false);

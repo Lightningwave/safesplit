@@ -178,7 +178,6 @@ func setupPublicRoutes(api *gin.RouterGroup, handlers *RouteHandlers) {
 func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 	protected.GET("/me", handlers.LoginController.GetMe)
 
-	// 2FA routes
 	twoFactor := protected.Group("/2fa")
 	{
 		twoFactor.GET("/status", handlers.TwoFactorController.GetTwoFactorStatus)
@@ -188,15 +187,12 @@ func setupProtectedRoutes(protected *gin.RouterGroup, handlers *RouteHandlers) {
 		twoFactor.POST("/disable/verify", handlers.TwoFactorController.VerifyAndDisable2FA)
 	}
 
-	// End User routes should be first as they're most commonly accessed
 	setupEndUserRoutes(protected, handlers.EndUserHandlers)
 
-	// Premium User routes
 	premium := protected.Group("/premium")
 	premium.Use(middleware.PremiumUserMiddleware())
 	setupPremiumUserRoutes(premium, handlers.PremiumUserHandlers)
 
-	// Admin routes with their respective middleware
 	superAdmin := protected.Group("/admin")
 	superAdmin.Use(middleware.SuperAdminMiddleware())
 	setupSuperAdminRoutes(superAdmin, handlers.SuperAdminHandlers)

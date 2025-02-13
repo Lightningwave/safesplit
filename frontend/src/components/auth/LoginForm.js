@@ -41,16 +41,16 @@ function LoginForm({ onLogin }) {
     setRemainingAttempts(null);
 
     try {
-        const response = await login(formData.email, formData.password, formData.twoFactorCode);
-        
-        if (response.requires_2fa) {
-            setRequires2FA(true);
-            setError('Please check your email for the 2FA code');
-        } else {
-            onLogin(response.data.user);
-            const dashboardRoute = getDashboardByRole(response.data.user.role);
-            navigate(dashboardRoute);
-        }
+      const response = await login(formData.email, formData.password, formData.twoFactorCode);
+      
+      if (response.requires_2fa) {
+          setRequires2FA(true);
+          setError('Please check your email for the 2FA code');
+      } else {
+          onLogin(response.user);
+          const dashboardRoute = getDashboardByRole(response.user.role);
+          navigate(dashboardRoute);
+      }
     } catch (err) {
       const responseData = err.response?.data;
       console.log('Full error response:', {

@@ -27,7 +27,6 @@ function SuperAdminLogin({ onLogin }) {
                 formData.twoFactorCode
             );
             
-            // Handle 2FA requirement
             if (response.requires_2fa) {
                 setRequires2FA(true);
                 setUserId(response.user_id);
@@ -36,7 +35,6 @@ function SuperAdminLogin({ onLogin }) {
                 return;
             }
 
-            // Normal login success
             onLogin(response.user);
             navigate('/super-dashboard');
         } catch (err) {

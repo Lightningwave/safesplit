@@ -48,18 +48,6 @@ CREATE TABLE server_master_keys (
     INDEX idx_key_id (key_id)
 );
 
--- Key rotation history table
--- Purpose: Tracks key rotation events
-CREATE TABLE key_rotation_histories (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    old_key_version INT NOT NULL,
-    new_key_version INT NOT NULL,
-    rotation_type ENUM('automatic', 'manual', 'forced') NOT NULL,
-    rotated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user_rotation (user_id, rotated_at)
-);
 
 -- Password history table
 CREATE TABLE password_history (
