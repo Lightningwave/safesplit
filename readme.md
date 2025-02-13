@@ -126,12 +126,15 @@ SMTP_FROM_NAME=Safesplit
 SMTP_FROM_EMAIL=noreply@safesplit.xyz
 
 # S3 Configuration
-S3_REGION_1=us-east-1
-S3_BUCKET_1=safesplit1
-S3_REGION_2=us-east-1
-S3_BUCKET_2=safesplit2
-S3_REGION_3=us-east-1
-S3_BUCKET_3=safesplit3
+Singapore
+S3_REGION_1=ap-southeast-1
+S3_BUCKET_1=safesplit-sg-node
+Japan
+S3_REGION_2=ap-northeast-1
+S3_BUCKET_2=safesplit-jp-node
+Australia
+S3_REGION_3=ap-southeast-2
+S3_BUCKET_3=safesplit-aus-node
 
 # AWS Credentials
 AWS_ACCESS_KEY_ID=your_access_key
