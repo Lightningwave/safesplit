@@ -87,7 +87,6 @@ func NewMassUploadFileController(
 func (c *MassUploadFileController) MassUpload(ctx *gin.Context) {
 	log.Printf("Starting mass file upload request")
 
-	// Get current user
 	user, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "error": "Unauthorized access"})
@@ -100,7 +99,6 @@ func (c *MassUploadFileController) MassUpload(ctx *gin.Context) {
 		return
 	}
 
-	// Parse form
 	form, err := ctx.MultipartForm()
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Failed to parse form"})
@@ -113,7 +111,6 @@ func (c *MassUploadFileController) MassUpload(ctx *gin.Context) {
 		return
 	}
 
-	// Get encryption parameters
 	encryptionType := services.EncryptionType(ctx.DefaultPostForm("encryption_type", string(services.StandardEncryption)))
 	if err := c.validateEncryptionType(encryptionType, currentUser); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -123,7 +120,6 @@ func (c *MassUploadFileController) MassUpload(ctx *gin.Context) {
 		return
 	}
 
-	// Parse parameters
 	nShares := c.parseIntParam(ctx, "shares", 5)
 	threshold := c.parseIntParam(ctx, "threshold", 3)
 	dataShards := c.parseIntParam(ctx, "data_shards", 4)
@@ -170,27 +166,24 @@ func (c *MassUploadFileController) MassUpload(ctx *gin.Context) {
 		wg.Add(1)
 		go func(fh *multipart.FileHeader) {
 			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire semaphore
-			defer func() { <-semaphore }() // Release semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
 			result := c.processUpload(ctx, fh, currentUser, folderID, uploadParams)
 			results <- result
 		}(fileHeader)
 	}
 
-	// Wait for all uploads to complete
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect results
 	uploadResults := make([]UploadResult, 0, len(files))
 	for result := range results {
 		uploadResults = append(uploadResults, result)
 	}
 
-	// Return results
 	ctx.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Mass file upload processing complete",
@@ -352,7 +345,6 @@ func (c *MassUploadFileController) createFileRecord(
 		return nil, fmt.Errorf("serverKey is nil")
 	}
 
-	// Create encoded filename
 	encryptedFileName := base64.RawURLEncoding.EncodeToString([]byte(fileHeader.Filename))
 
 	return &models.File{
@@ -433,7 +425,6 @@ func (c *MassUploadFileController) handleFolderAssignment(ctx *gin.Context, user
 		}
 		parsedID := uint(id)
 
-		// Verify folder exists and belongs to user - use GetFolderByID instead of GetFolder
 		folder, err := c.folderModel.GetFolderByID(parsedID, user.ID)
 		if err != nil {
 			log.Printf("Folder not found or access denied: %v", err)
@@ -442,7 +433,6 @@ func (c *MassUploadFileController) handleFolderAssignment(ctx *gin.Context, user
 		return &folder.ID
 	}
 
-	// Try to find or create "My Files" folder
 	folders, err := c.folderModel.GetUserFolders(user.ID)
 	if err != nil {
 		log.Printf("Failed to get user folders: %v", err)
@@ -515,7 +505,6 @@ func (c *MassUploadFileController) getFileInfo(file *models.File, params *Upload
 	}
 }
 
-// Error types for mass upload
 type UploadError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -534,10 +523,8 @@ func newUploadError(code, message string, details string) *UploadError {
 	}
 }
 
-// Additional helper methods for handling large uploads
 func (c *MassUploadFileController) calculateBatchSize(fileCount int) int {
-	// Calculate optimal batch size based on available system resources
-	// Default to 5 concurrent uploads, but adjust based on file count
+
 	if fileCount <= 5 {
 		return fileCount
 	}
@@ -551,7 +538,6 @@ func (c *MassUploadFileController) validateTotalSize(files []*multipart.FileHead
 	var totalSize int64
 	for _, file := range files {
 		totalSize += file.Size
-		// Individual file size limit (e.g., 2GB)
 		if file.Size > 2<<30 {
 			return 0, newUploadError(
 				"FILE_TOO_LARGE",

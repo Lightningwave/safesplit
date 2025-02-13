@@ -12,7 +12,6 @@ import (
 type PasswordResetController struct {
     userModel            *models.UserModel
     passwordHistoryModel *models.PasswordHistoryModel
-    keyRotationModel     *models.KeyRotationModel
     keyFragmentModel     *models.KeyFragmentModel  
     fileModel           *models.FileModel         
 }
@@ -25,14 +24,12 @@ type PasswordResetRequest struct {
 func NewPasswordResetController(
     userModel *models.UserModel,
     passwordHistoryModel *models.PasswordHistoryModel,
-    keyRotationModel *models.KeyRotationModel,
     keyFragmentModel *models.KeyFragmentModel,
     fileModel *models.FileModel,
 ) *PasswordResetController {
     return &PasswordResetController{
         userModel:            userModel,
         passwordHistoryModel: passwordHistoryModel,
-        keyRotationModel:     keyRotationModel,
         keyFragmentModel:     keyFragmentModel,
         fileModel:            fileModel,
     }
@@ -63,7 +60,6 @@ func (c *PasswordResetController) ResetPassword(ctx *gin.Context) {
         return
     }
 
-    // Call the model method to handle all database operations
     err := c.userModel.ResetPasswordWithFragments(
         endUser.ID,
         req.CurrentPassword,
@@ -76,7 +72,6 @@ func (c *PasswordResetController) ResetPassword(ctx *gin.Context) {
     if err != nil {
         log.Printf("Password reset failed for user %d: %v", endUser.ID, err)
         
-        // Map common errors to appropriate HTTP status codes
         status := http.StatusInternalServerError
         switch err.Error() {
         case "current password is incorrect":
