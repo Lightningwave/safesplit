@@ -49,9 +49,9 @@ type EndUserHandlers struct {
 	FeedbackController       *EndUser.FeedbackController
 }
 type PremiumUserHandlers struct {
-	FragmentController          *PremiumUser.FragmentController
 	FileRecoveryController      *PremiumUser.FileRecoveryController
 	AdvancedShareFileController *PremiumUser.ShareFileController
+	UpdateBillingController     *PremiumUser.UpdateBillingController
 }
 
 type SuperAdminHandlers struct {
@@ -71,6 +71,7 @@ type SysAdminHandlers struct {
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
 	ViewFeedbacksController          *SysAdmin.ViewFeedbacksController
 	ViewReportsController            *SysAdmin.ViewReportsController
+	ViewBillingRecordsController     *SysAdmin.ViewBillingRecordsController
 }
 
 func NewRouteHandlers(
@@ -83,7 +84,6 @@ func NewRouteHandlers(
 	folderModel *models.FolderModel,
 	fileShareModel *models.FileShareModel,
 	keyFragmentModel *models.KeyFragmentModel,
-	keyRotationModel *models.KeyRotationModel,
 	serverMasterKeyModel *models.ServerMasterKeyModel,
 	feedbackModel *models.FeedbackModel,
 	encryptionService *services.EncryptionService,
@@ -95,7 +95,7 @@ func NewRouteHandlers(
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
-		LoginController:           controllers.NewLoginController(userModel, billingModel),
+		LoginController:           controllers.NewLoginController(userModel, billingModel, activityLogModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
 		TwoFactorController:       EndUser.NewTwoFactorController(userModel, twoFactorService),
@@ -115,6 +115,7 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
 			ViewFeedbacksController:          SysAdmin.NewViewFeedbacksController(feedbackModel),
 			ViewReportsController:            SysAdmin.NewViewReportsController(feedbackModel, userModel),
+			ViewBillingRecordsController:     SysAdmin.NewViewBillingRecordsController(billingModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
@@ -132,7 +133,7 @@ func NewRouteHandlers(
 			CreateFolderController:   EndUser.NewCreateFolderController(folderModel, activityLogModel),
 			ViewFolderController:     EndUser.NewViewFolderController(folderModel, fileModel),
 			DeleteFolderController:   EndUser.NewDeleteFolderController(folderModel, activityLogModel),
-			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyRotationModel, keyFragmentModel, fileModel),
+			PasswordResetController:  EndUser.NewPasswordResetController(userModel, passwordHistoryModel, keyFragmentModel, fileModel),
 			ViewStorageController:    EndUser.NewViewStorageController(fileModel, userModel),
 			PaymentController:        EndUser.NewPaymentController(billingModel),
 			SubscriptionController:   EndUser.NewSubscriptionController(billingModel),
@@ -140,9 +141,9 @@ func NewRouteHandlers(
 			FeedbackController:       EndUser.NewFeedbackController(feedbackModel),
 		},
 		PremiumUserHandlers: &PremiumUserHandlers{
-			FragmentController:          PremiumUser.NewFragmentController(keyFragmentModel, fileModel),
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
 			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel, twoFactorService, emailService, compressionService),
+			UpdateBillingController:     PremiumUser.NewUpdateBillingController(billingModel),
 		},
 	}
 }
@@ -262,11 +263,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
-	// Fragment management routes
-	fragments := premium.Group("/fragments")
-	{
-		fragments.GET("/files/:fileId", handlers.FragmentController.GetUserFragments)
-	}
+
 	recovery := premium.Group("/recovery")
 	{
 		recovery.GET("/files", handlers.FileRecoveryController.ListRecoverableFiles)
@@ -275,6 +272,11 @@ func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandl
 	shares := premium.Group("/shares")
 	{
 		shares.POST("/files/:id", handlers.AdvancedShareFileController.CreateShare)
+	}
+	billing := premium.Group("/billing")
+	{
+		billing.GET("/details", handlers.UpdateBillingController.GetBillingDetails)
+		billing.PUT("/details", handlers.UpdateBillingController.UpdateBillingDetails)
 	}
 }
 
@@ -314,5 +316,11 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 		reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
 		reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
 		reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
+	}
+	billing := sysAdmin.Group("/billing")
+	{
+		billing.GET("/records", handlers.ViewBillingRecordsController.GetAllBillingRecords)
+		billing.GET("/stats", handlers.ViewBillingRecordsController.GetBillingStats)
+		billing.GET("/expiring", handlers.ViewBillingRecordsController.GetExpiringSubscriptions)
 	}
 }

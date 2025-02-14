@@ -44,7 +44,18 @@ const UpdateUserAction = ({ isOpen, onClose, userId, currentUser, onUpdateSucces
     e.preventDefault();
     setLoading(true);
     setError(null);
-
+  
+    const updatedUser = {
+      ...currentUser,
+      username: formData.username,
+      email: formData.email,
+      subscription_status: formData.account_type,
+      read_access: formData.read_access,
+      write_access: formData.write_access
+    };
+  
+    onUpdateSuccess(updatedUser);
+  
     try {
       const response = await fetch(`http://localhost:8080/api/system/users/${userId}`, {
         method: 'PUT',
@@ -60,14 +71,14 @@ const UpdateUserAction = ({ isOpen, onClose, userId, currentUser, onUpdateSucces
           write_access: formData.write_access
         }),
       });
-
+  
       const data = await response.json();
-
+  
       if (!response.ok) {
+        onUpdateSuccess(currentUser);
         throw new Error(data.error || 'Failed to update user account');
       }
-
-      onUpdateSuccess(data.user);
+  
       onClose();
     } catch (err) {
       console.error('Error updating user:', err);

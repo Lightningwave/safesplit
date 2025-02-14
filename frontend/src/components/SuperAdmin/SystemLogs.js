@@ -3,25 +3,19 @@ import { Search, ArrowUpDown, AlertCircle, Loader2 } from 'lucide-react';
 
 const SystemLogs = () => {
     const [logs, setLogs] = useState([]);
+    const [filteredLogs, setFilteredLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filters, setFilters] = useState({
         search: '',
-        timestamp: '',
         activity_type: '',
-        source: '',
         user_id: ''
     });
 
     const fetchLogs = async () => {
         try {
             setLoading(true);
-            const queryParams = new URLSearchParams();
-            Object.entries(filters).forEach(([key, value]) => {
-                if (value) queryParams.append(key, value);
-            });
-
-            const response = await fetch(`http://localhost:8080/api/admin/system-logs?${queryParams}`, {
+            const response = await fetch('http://localhost:8080/api/admin/system-logs', {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
@@ -32,7 +26,8 @@ const SystemLogs = () => {
             }
 
             const data = await response.json();
-            setLogs(data.logs);
+            setLogs(data.logs || []);
+            setFilteredLogs(data.logs || []);
             setError(null);
         } catch (err) {
             setError(err.message);
@@ -45,9 +40,49 @@ const SystemLogs = () => {
         fetchLogs();
     }, []);
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        fetchLogs();
+    useEffect(() => {
+        const filterLogs = () => {
+            let result = [...logs];
+
+            if (filters.search.trim()) {
+                const searchTerms = filters.search.toLowerCase().split(' ').filter(term => term);
+                result = result.filter(log => {
+                    const searchableFields = [
+                        log.details,
+                        log.error_message,
+                        log.ip_address,
+                        log.user_id?.toString(),
+                        log.activity_type
+                    ].filter(Boolean); 
+
+                    return searchTerms.every(term =>
+                        searchableFields.some(field =>
+                            field.toLowerCase().includes(term)
+                        )
+                    );
+                });
+            }
+
+            if (filters.activity_type) {
+                result = result.filter(log => 
+                    log.activity_type === filters.activity_type
+                );
+            }
+
+            if (filters.user_id.trim()) {
+                result = result.filter(log => 
+                    log.user_id?.toString() === filters.user_id.trim()
+                );
+            }
+
+            setFilteredLogs(result);
+        };
+
+        filterLogs();
+    }, [filters, logs]);
+
+    const handleFilterChange = (field, value) => {
+        setFilters(prev => ({ ...prev, [field]: value }));
     };
 
     const getActivityTypeStyle = (activityType) => {
@@ -70,21 +105,38 @@ const SystemLogs = () => {
     return (
         <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b border-gray-200">
-                <form onSubmit={handleSearch} className="flex gap-4">
+                <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                        <input
+                            type="text"
+                            placeholder="Search logs..."
+                            className="w-full p-2 pr-10 border rounded-md"
+                            value={filters.search}
+                            onChange={(e) => handleFilterChange('search', e.target.value)}
+                        />
+                        <Search className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+                    </div>
+                    <select
+                        className="p-2 border rounded-md min-w-[160px]"
+                        value={filters.activity_type}
+                        onChange={(e) => handleFilterChange('activity_type', e.target.value)}
+                    >
+                        <option value="">All Activity Types</option>
+                        <option value="login">Login</option>
+                        <option value="logout">Logout</option>
+                        <option value="upload">Upload</option>
+                        <option value="download">Download</option>
+                        <option value="delete">Delete</option>
+                        <option value="share">Share</option>
+                    </select>
                     <input
                         type="text"
-                        placeholder="Search logs..."
-                        className="flex-1 p-2 border rounded-md"
-                        value={filters.search}
-                        onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                        placeholder="User ID"
+                        className="p-2 border rounded-md w-32"
+                        value={filters.user_id}
+                        onChange={(e) => handleFilterChange('user_id', e.target.value)}
                     />
-                    <button
-                        type="submit"
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                        Search
-                    </button>
-                </form>
+                </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -99,7 +151,7 @@ const SystemLogs = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {logs.map((log) => (
+                        {filteredLogs.map((log) => (
                             <tr key={log.id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 text-sm text-gray-900">
                                     {new Date(log.created_at).toLocaleString()}
@@ -110,7 +162,7 @@ const SystemLogs = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
-                                    {log.error_message || '-'}
+                                    {log.details || log.error_message || '-'}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
                                     {log.ip_address}
@@ -123,9 +175,9 @@ const SystemLogs = () => {
                     </tbody>
                 </table>
 
-                {logs.length === 0 && !loading && (
+                {filteredLogs.length === 0 && !loading && (
                     <div className="text-center py-8 text-gray-500">
-                        No logs found
+                        No logs found matching your criteria
                     </div>
                 )}
             </div>

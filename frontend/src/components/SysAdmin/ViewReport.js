@@ -68,10 +68,30 @@ const ViewReport = () => {
     };
 
     const updateReportStatus = async (reportId, newStatus) => {
+        const comment = prompt('Please enter a comment for this status update:');
+        if (!comment) return;
+    
+        const reportToUpdate = reports.find(r => r.id === reportId);
+        const oldStatus = reportToUpdate.status;
+    
+        setReports(prevReports => 
+            prevReports.map(report => 
+                report.id === reportId 
+                    ? { ...report, status: newStatus }
+                    : report
+            )
+        );
+    
+        setStats(prevStats => ({
+            ...prevStats,
+            total: {
+                ...prevStats.total,
+                [oldStatus]: prevStats.total[oldStatus] - 1,
+                [newStatus]: prevStats.total[newStatus] + 1
+            }
+        }));
+    
         try {
-            const comment = prompt('Please enter a comment for this status update:');
-            if (!comment) return;
-
             const token = localStorage.getItem('token');
             const response = await fetch(`http://localhost:8080/api/system/reports/${reportId}/status`, {
                 method: 'PUT',
@@ -84,15 +104,29 @@ const ViewReport = () => {
                     comment: comment
                 })
             });
-
+    
             if (!response.ok) {
                 throw new Error('Failed to update status');
             }
-
-            // Refresh data
-            fetchReports(currentPage, selectedStatus);
-            fetchStats();
+    
         } catch (err) {
+            setReports(prevReports => 
+                prevReports.map(report => 
+                    report.id === reportId 
+                        ? { ...report, status: oldStatus }
+                        : report
+                )
+            );
+    
+            setStats(prevStats => ({
+                ...prevStats,
+                total: {
+                    ...prevStats.total,
+                    [oldStatus]: prevStats.total[oldStatus] + 1,
+                    [newStatus]: prevStats.total[newStatus] - 1
+                }
+            }));
+            
             setError(err.message);
         }
     };

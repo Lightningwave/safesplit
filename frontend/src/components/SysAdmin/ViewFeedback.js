@@ -65,6 +65,23 @@ const ViewFeedback = () => {
     };
 
     const updateStatus = async (feedbackId, newStatus) => {
+        const updatedFeedback = feedbacks.find(f => f.id === feedbackId);
+        const oldStatus = updatedFeedback.status;
+        
+        setFeedbacks(prevFeedbacks => 
+            prevFeedbacks.map(feedback => 
+                feedback.id === feedbackId 
+                    ? { ...feedback, status: newStatus }
+                    : feedback
+            )
+        );
+    
+        setStats(prevStats => ({
+            ...prevStats,
+            [oldStatus]: prevStats[oldStatus] - 1,
+            [newStatus]: prevStats[newStatus] + 1
+        }));
+    
         try {
             const token = localStorage.getItem('token');
             const response = await fetch(`http://localhost:8080/api/system/feedback/${feedbackId}/status`, {
@@ -77,15 +94,26 @@ const ViewFeedback = () => {
                     status: newStatus
                 })
             });
-
+    
             if (!response.ok) {
                 throw new Error('Failed to update status');
             }
-
-            // Refresh data
-            fetchFeedbacks(currentPage, selectedStatus);
-            fetchStats();
+    
         } catch (err) {
+            setFeedbacks(prevFeedbacks => 
+                prevFeedbacks.map(feedback => 
+                    feedback.id === feedbackId 
+                        ? { ...feedback, status: oldStatus }
+                        : feedback
+                )
+            );
+    
+            setStats(prevStats => ({
+                ...prevStats,
+                [oldStatus]: prevStats[oldStatus] + 1,
+                [newStatus]: prevStats[newStatus] - 1
+            }));
+    
             setError(err.message);
         }
     };

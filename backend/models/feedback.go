@@ -44,7 +44,6 @@ func (m *FeedbackModel) Create(feedback *Feedback) error {
 	return m.db.Create(feedback).Error
 }
 
-// GetByID retrieves a feedback entry by its ID
 func (m *FeedbackModel) GetByID(id uint) (*Feedback, error) {
 	var feedback Feedback
 	if err := m.db.Preload("User").First(&feedback, id).Error; err != nil {
@@ -53,7 +52,6 @@ func (m *FeedbackModel) GetByID(id uint) (*Feedback, error) {
 	return &feedback, nil
 }
 
-// GetAllByUser retrieves all feedback entries for a specific user
 func (m *FeedbackModel) GetAllByUser(userID uint) ([]Feedback, error) {
 	var feedbacks []Feedback
 	if err := m.db.Where("user_id = ?", userID).Find(&feedbacks).Error; err != nil {
@@ -62,7 +60,6 @@ func (m *FeedbackModel) GetAllByUser(userID uint) ([]Feedback, error) {
 	return feedbacks, nil
 }
 
-// GetAllByUserAndType retrieves all feedback entries for a specific user and type
 func (m *FeedbackModel) GetAllByUserAndType(userID uint, feedbackType FeedbackType) ([]Feedback, error) {
 	var feedbacks []Feedback
 	err := m.db.Where("user_id = ? AND type = ?", userID, feedbackType).
@@ -74,7 +71,6 @@ func (m *FeedbackModel) GetAllByUserAndType(userID uint, feedbackType FeedbackTy
 	return feedbacks, nil
 }
 
-// GetAll retrieves all feedback entries with optional filters
 func (m *FeedbackModel) GetAll(filters map[string]interface{}, page, pageSize int) ([]Feedback, int64, error) {
 	var feedbacks []Feedback
 	var total int64
@@ -121,7 +117,6 @@ func (m *FeedbackModel) GetByStatus(status FeedbackStatus) ([]Feedback, error) {
 	return feedbacks, nil
 }
 
-// GetByType retrieves all feedback entries of a specific type
 func (m *FeedbackModel) GetByType(feedbackType FeedbackType) ([]Feedback, error) {
 	var feedbacks []Feedback
 	if err := m.db.Where("type = ?", feedbackType).Find(&feedbacks).Error; err != nil {
@@ -130,7 +125,6 @@ func (m *FeedbackModel) GetByType(feedbackType FeedbackType) ([]Feedback, error)
 	return feedbacks, nil
 }
 
-// GetPendingCount returns the count of pending feedback entries
 func (m *FeedbackModel) GetPendingCount() (int64, error) {
 	var count int64
 	err := m.db.Model(&Feedback{}).
@@ -139,7 +133,6 @@ func (m *FeedbackModel) GetPendingCount() (int64, error) {
 	return count, err
 }
 
-// GetDateRangeCount returns the count of feedback entries within a date range
 func (m *FeedbackModel) GetDateRangeCount(startDate, endDate time.Time) (int64, error) {
 	var count int64
 	err := m.db.Model(&Feedback{}).
@@ -148,7 +141,6 @@ func (m *FeedbackModel) GetDateRangeCount(startDate, endDate time.Time) (int64, 
 	return count, err
 }
 
-// UpdateStatusWithComment updates both the status and adds a comment to the feedback
 func (m *FeedbackModel) UpdateStatusWithComment(id uint, status FeedbackStatus, comment string) error {
 	return m.db.Transaction(func(tx *gorm.DB) error {
 		feedback, err := m.GetByID(id)
@@ -156,10 +148,8 @@ func (m *FeedbackModel) UpdateStatusWithComment(id uint, status FeedbackStatus, 
 			return fmt.Errorf("feedback not found: %w", err)
 		}
 
-		// Update status
 		feedback.Status = status
 
-		// Append comment to details with timestamp
 		timestamp := time.Now().Format(time.RFC3339)
 		newDetails := fmt.Sprintf("%s\n[%s] Status changed to %s: %s",
 			feedback.Details,
@@ -169,7 +159,6 @@ func (m *FeedbackModel) UpdateStatusWithComment(id uint, status FeedbackStatus, 
 		)
 		feedback.Details = newDetails
 
-		// Save changes
 		if err := tx.Save(feedback).Error; err != nil {
 			return fmt.Errorf("failed to update feedback: %w", err)
 		}

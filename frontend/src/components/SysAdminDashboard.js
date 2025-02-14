@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   ChevronDown, 
-  ChevronRight, 
+  ChevronRight,
   HardDrive,
 } from 'lucide-react';
 import ViewUserAccounts from './SysAdmin/ViewUserAccounts';
@@ -10,12 +10,48 @@ import ViewStorage from './SysAdmin/ViewStorage';
 import ViewDeletedAccounts from './SysAdmin/ViewDeletedAccounts';
 import ViewFeedback from './SysAdmin/ViewFeedback';
 import ViewReport from './SysAdmin/ViewReport';
+import ViewBillingRecords from './SysAdmin/ViewBillingRecords';
 
 const SysAdminDashboard = ({ user, onLogout }) => {
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState('Dashboard');
   const [selectedUserType, setSelectedUserType] = useState('all');
-  const [recentViewedUsers, setRecentViewedUsers] = useState([]);
+  const [recentUpdatedUsers, setRecentUpdatedUsers] = useState([]);
+
+  // Fetch recently updated users
+  const fetchRecentUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/system/users', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent users');
+      }
+
+      const data = await response.json();
+      const usersList = Array.isArray(data.users) ? data.users : 
+                       Array.isArray(data.data) ? data.data :
+                       Array.isArray(data) ? data : [];
+
+      // Sort users by updated_at timestamp
+      const sortedUsers = usersList
+        .filter(user => user && user.updated_at)
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        .slice(0, 5);
+
+      setRecentUpdatedUsers(sortedUsers);
+    } catch (error) {
+      console.error('Error fetching recent users:', error);
+    }
+  };
+
+  // Fetch recent users on component mount
+  useEffect(() => {
+    fetchRecentUsers();
+  }, []);
 
   const handleUserTypeSelect = (type) => {
     setSelectedUserType(type);
@@ -23,16 +59,26 @@ const SysAdminDashboard = ({ user, onLogout }) => {
     setIsAccountsOpen(false);
   };
 
-  const handleViewUser = (userId) => {
-    const user = getUserById(userId);
-    if (user && !recentViewedUsers.find(u => u.id === user.id)) {
-      setRecentViewedUsers(prev => [user, ...prev].slice(0, 5));
-    }
+  const handleUserViewed = (viewedUser) => {
+    if (!viewedUser) return;
+    
+    setRecentUpdatedUsers(prev => {
+      // Remove the user if already in the list
+      const filteredUsers = prev.filter(u => u.id !== viewedUser.id);
+      // Add the user at the beginning and maintain sorting
+      const updatedUsers = [viewedUser, ...filteredUsers]
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        .slice(0, 5);
+      return updatedUsers;
+    });
   };
 
-  const getUserById = (id) => {
-    return null;
-  };
+  // Refresh recent users when returning to dashboard
+  useEffect(() => {
+    if (selectedSection === 'Dashboard') {
+      fetchRecentUsers();
+    }
+  }, [selectedSection]);
 
   const renderDashboardContent = () => (
     <div className="space-y-8">
@@ -64,27 +110,42 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Recent Viewed Users Section */}
+      {/* Recent Updated Users Section */}
       <div>
-        <h2 className="text-lg font-semibold">Recent Viewed Users</h2>
-        <div className="bg-white rounded-lg shadow p-4">
-          {recentViewedUsers.length > 0 ? (
-            <ul>
-              {recentViewedUsers.map(user => (
-                <li key={user.id} className="flex justify-between items-center py-2">
-                  <span>{user.username}</span>
-                  <button 
-                    onClick={() => handleViewUser(user.id)}
-                    className="text-blue-500 hover:underline text-sm"
-                  >
-                    View
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-600">No recent users viewed.</p>
-          )}
+        <h2 className="text-lg font-semibold mb-4">Recent Updated Users</h2>
+        <div className="bg-white rounded-lg shadow">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">UserID</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Name</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Account Type</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Last Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {recentUpdatedUsers.length > 0 ? (
+                recentUpdatedUsers.map(user => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-900">{user.id}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{user.username}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {user.subscription_status === 'premium' ? 'Premium' : 'Normal'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {user.updated_at ? new Date(user.updated_at).toLocaleDateString() : 'Never'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                    No recent updated users.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -95,7 +156,10 @@ const SysAdminDashboard = ({ user, onLogout }) => {
       case 'Dashboard':
         return renderDashboardContent();
       case 'Account Management':
-        return <ViewUserAccounts selectedType={selectedUserType} />;
+        return <ViewUserAccounts 
+          selectedType={selectedUserType}
+          onUserViewed={handleUserViewed} 
+        />;
       case 'View Storage':
         return <ViewStorage />;
       case 'Deleted Accounts':
@@ -104,6 +168,8 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         return <ViewFeedback feedbackType="feedback" />;
       case 'Reports':
         return <ViewReport feedbackType="suspicious_activity" />;
+      case 'Billing Records':
+        return <ViewBillingRecords />;
       default:
         return renderDashboardContent();
     }
@@ -210,6 +276,16 @@ const SysAdminDashboard = ({ user, onLogout }) => {
 
             <li>
               <button 
+                onClick={() => setSelectedSection('Billing Records')}
+                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
+                  ${selectedSection === 'Billing Records' ? 'bg-gray-800' : ''}`}
+              >
+                Billing Records
+              </button>
+            </li>
+
+            <li>
+              <button 
                 onClick={() => setSelectedSection('View Storage')}
                 className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
                   ${selectedSection === 'View Storage' ? 'bg-gray-800' : ''}`}
@@ -221,13 +297,13 @@ const SysAdminDashboard = ({ user, onLogout }) => {
         </nav>
 
         <div className="border-t border-gray-800 p-4">
-      <button 
-        onClick={onLogout}
-        className="block w-full text-left px-4 py-2 hover:bg-gray-800 rounded transition-colors duration-200"
-      >
-        Logout
-      </button>
-    </div>
+          <button 
+            onClick={onLogout}
+            className="block w-full text-left px-4 py-2 hover:bg-gray-800 rounded transition-colors duration-200"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}

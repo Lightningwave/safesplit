@@ -5,14 +5,13 @@ import ViewUserAction from './ViewUserAction';
 import UpdateUserAction from './UpdateUserAction';
 import DeleteUserAction from './DeleteUserAction';
 
-const ViewUserAccounts = ({ selectedType }) => {
+const ViewUserAccounts = ({ selectedType, onUserViewed }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [activeMenu, setActiveMenu] = useState(null);
   
-  // Modal states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -36,12 +35,10 @@ const ViewUserAccounts = ({ selectedType }) => {
       }
       
       const data = await response.json();
-      // Handle different possible response structures
       const usersList = Array.isArray(data.users) ? data.users : 
                        Array.isArray(data.data) ? data.data :
                        Array.isArray(data) ? data : [];
       
-      // Validate user objects and ensure required properties exist
       const validUsers = usersList.filter(user => 
         user && 
         typeof user === 'object' && 
@@ -71,7 +68,6 @@ const ViewUserAccounts = ({ selectedType }) => {
     }
   }, [error]);
 
-  // Add validation to handle null/undefined users
   const filteredUsers = users.filter(user => {
     if (!user || !user.id || !user.subscription_status) return false;
     
@@ -85,7 +81,6 @@ const ViewUserAccounts = ({ selectedType }) => {
 
   const handleSelectAll = (event) => {
     if (event.target.checked && filteredUsers.length > 0) {
-      // Only select users with valid IDs
       const validUserIds = filteredUsers
         .filter(user => user && user.id)
         .map(user => user.id);
@@ -124,6 +119,7 @@ const ViewUserAccounts = ({ selectedType }) => {
     if (!user || !user.id) return;
     setUserToView(user.id);
     setIsViewModalOpen(true);
+    onUserViewed(user);
   };
 
   const handleUpdateClick = (user) => {
@@ -252,7 +248,7 @@ const ViewUserAccounts = ({ selectedType }) => {
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">UserID</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Name</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Account Type</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Last Viewed</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Last Updated</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -279,7 +275,7 @@ const ViewUserAccounts = ({ selectedType }) => {
                         {user.subscription_status === 'premium' ? 'Premium' : 'Normal'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                        {user.updated_at ? new Date(user.updated_at).toLocaleDateString() : 'Never'}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <ActionMenu user={user} />
@@ -335,6 +331,7 @@ const ViewUserAccounts = ({ selectedType }) => {
 
 ViewUserAccounts.propTypes = {
   selectedType: PropTypes.oneOf(['premium', 'normal', 'all']).isRequired,
+  onUserViewed: PropTypes.func.isRequired,  
 };
 
 export default ViewUserAccounts;

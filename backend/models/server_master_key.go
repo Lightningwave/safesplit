@@ -98,49 +98,6 @@ func (m *ServerMasterKeyModel) GetActive() (*ServerMasterKey, error) {
 	return &key, nil
 }
 
-// Rotate generates a new master key and retires the old one
-func (m *ServerMasterKeyModel) Rotate() error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		var currentKey ServerMasterKey
-		if err := tx.Where("is_active = ? AND retired_at IS NULL", true).First(&currentKey).Error; err != nil {
-			return fmt.Errorf("failed to get current server key: %w", err)
-		}
-
-		masterKey := make([]byte, 32)
-		if _, err := rand.Read(masterKey); err != nil {
-			return fmt.Errorf("failed to generate master key: %w", err)
-		}
-
-		nonce, err := utils.GenerateNonce()
-		if err != nil {
-			return fmt.Errorf("failed to generate nonce: %w", err)
-		}
-
-		keyID, err := generateKeyID()
-		if err != nil {
-			return fmt.Errorf("failed to generate key ID: %w", err)
-		}
-
-		now := time.Now()
-		newKey := &ServerMasterKey{
-			KeyID:        keyID,
-			EncryptedKey: masterKey,
-			KeyNonce:     nonce,
-			IsActive:     true,
-			ActivatedAt:  &now,
-		}
-
-		if err := tx.Create(newKey).Error; err != nil {
-			return fmt.Errorf("failed to create new key: %w", err)
-		}
-
-		return tx.Model(&currentKey).Updates(map[string]interface{}{
-			"is_active":  false,
-			"retired_at": now,
-		}).Error
-	})
-}
-
 // GetByID retrieves a specific server master key by its ID
 func (m *ServerMasterKeyModel) GetByID(keyID string) (*ServerMasterKey, error) {
 	var key ServerMasterKey

@@ -23,7 +23,6 @@ const UpdateUserPermissions = () => {
       }
       
       const data = await response.json();
-      // Ensure we're accessing the correct data structure
       const usersList = Array.isArray(data.data) ? data.data : 
                        Array.isArray(data) ? data : [];
       setUsers(usersList);
@@ -42,6 +41,14 @@ const UpdateUserPermissions = () => {
   
     setSaving(userId);
     setError(null);
+    
+    setUsers(prevUsers => 
+      prevUsers.map(user => 
+        user.id === userId 
+          ? { ...user, read_access: updates.readAccess, write_access: updates.writeAccess }
+          : user
+      )
+    );
     
     try {
       const currentUser = users.find(u => u.id === userId);
@@ -65,23 +72,17 @@ const UpdateUserPermissions = () => {
       });
   
       if (!response.ok) {
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === userId 
+              ? { ...user, read_access: currentUser.read_access, write_access: currentUser.write_access }
+              : user
+          )
+        );
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update permissions');
       }
       
-      const data = await response.json();
-      
-      // Handle different response data structures
-      const updatedUser = data.data?.user || data.user || data;
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId 
-            ? { ...user, ...updatedUser }
-            : user
-        )
-      );
-  
       setSuccessMessage('Permissions updated successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {

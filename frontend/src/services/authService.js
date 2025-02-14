@@ -56,9 +56,14 @@ export const login = async (email, password, twoFactorCode = '') => {
                 user_id: data.user_id
             };
         }
-        
+
         if (!response.ok) {
-            throw new Error(data.error || 'Login failed');
+            throw {
+                response: {
+                    status: response.status,
+                    data: data
+                }
+            };
         }
 
         localStorage.setItem('token', data.token);
@@ -66,11 +71,18 @@ export const login = async (email, password, twoFactorCode = '') => {
         if (data.data.billing_profile) {
             localStorage.setItem('billing', JSON.stringify(data.data.billing_profile));
         }
-        
-        return data.data;
+
+        return {
+            user: data.data.user,
+            billing_profile: data.data.billing_profile
+        };
     } catch (error) {
         console.error('Login error:', error);
-        throw error;
+        throw error.response ? error : {
+            response: {
+                data: { error: error.message || 'Login failed' }
+            }
+        };
     }
 };
 
