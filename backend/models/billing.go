@@ -148,6 +148,34 @@ func (m *BillingModel) GetUserWithBilling(userID uint) (*UserBillingInfo, error)
 
 	return &info, nil
 }
+func (m *BillingModel) GetAllBillingRecords(status, cycle string, page, pageSize int) ([]BillingProfile, int64, error) {
+    var profiles []BillingProfile
+    var totalCount int64
+    
+    query := m.db.Model(&BillingProfile{})
+    
+    if status != "" {
+        query = query.Where("billing_status = ?", status)
+    }
+    if cycle != "" {
+        query = query.Where("billing_cycle = ?", cycle)
+    }
+    
+    if err := query.Count(&totalCount).Error; err != nil {
+        return nil, 0, err
+    }
+    
+    offset := (page - 1) * pageSize
+    err := query.Offset(offset).Limit(pageSize).
+        Preload("User").  
+        Find(&profiles).Error
+    
+    if err != nil {
+        return nil, 0, err
+    }
+    
+    return profiles, totalCount, nil
+}
 
 func (m *BillingModel) UpdateSubscriptionStatus(userID uint, status string) error {
 	return m.db.Transaction(func(tx *gorm.DB) error {

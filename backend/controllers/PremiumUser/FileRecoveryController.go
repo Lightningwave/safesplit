@@ -73,7 +73,6 @@ func (c *FileRecoveryController) RecoverFile(ctx *gin.Context) {
 	})
 }
 
-// ListRecoverableFiles returns a list of files that can be recovered
 func (c *FileRecoveryController) ListRecoverableFiles(ctx *gin.Context) {
 	user, exists := ctx.Get("user")
 	if !exists {
@@ -93,7 +92,6 @@ func (c *FileRecoveryController) ListRecoverableFiles(ctx *gin.Context) {
 		return
 	}
 
-	// Check if user is premium
 	if !currentUser.IsPremiumUser() {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"status": "error",
@@ -102,7 +100,6 @@ func (c *FileRecoveryController) ListRecoverableFiles(ctx *gin.Context) {
 		return
 	}
 
-	// Get only deleted files
 	files, err := c.fileModel.GetRecoverableFiles(currentUser.ID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{

@@ -57,10 +57,9 @@ func main() {
 	}
 	twoFactorService := services.NewTwoFactorAuthService(emailService)
 
-	// Initialize subscription handler and scheduler
-	subscriptionHandler := jobs.NewSubscriptionHandler(db)
-	jobs.StartSubscriptionScheduler(subscriptionHandler)
-
+	// Initialize job handler and scheduler
+	jobManager := jobs.NewJobManager(db)
+	jobManager.StartAllJobs()
 	// Initialize S3 storage service
 	s3Configs := []struct {
 		Region     string
