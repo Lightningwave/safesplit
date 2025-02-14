@@ -145,7 +145,8 @@ const SystemLogs = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
-                                    {log.error_message || '-'}
+                                  {log.details || log.error_message || '-'}
+
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
                                     {log.ip_address}
