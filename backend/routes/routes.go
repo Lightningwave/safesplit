@@ -51,6 +51,7 @@ type EndUserHandlers struct {
 type PremiumUserHandlers struct {
 	FileRecoveryController      *PremiumUser.FileRecoveryController
 	AdvancedShareFileController *PremiumUser.ShareFileController
+	UpdateBillingController     *PremiumUser.UpdateBillingController
 }
 
 type SuperAdminHandlers struct {
@@ -70,6 +71,7 @@ type SysAdminHandlers struct {
 	ViewUserAccountDetailsController *SysAdmin.ViewUserAccountDetailsController
 	ViewFeedbacksController          *SysAdmin.ViewFeedbacksController
 	ViewReportsController            *SysAdmin.ViewReportsController
+	ViewBillingRecordsController     *SysAdmin.ViewBillingRecordsController
 }
 
 func NewRouteHandlers(
@@ -113,6 +115,7 @@ func NewRouteHandlers(
 			ViewUserAccountDetailsController: SysAdmin.NewViewUserAccountDetailsController(userModel, billingModel),
 			ViewFeedbacksController:          SysAdmin.NewViewFeedbacksController(feedbackModel),
 			ViewReportsController:            SysAdmin.NewViewReportsController(feedbackModel, userModel),
+			ViewBillingRecordsController:     SysAdmin.NewViewBillingRecordsController(billingModel),
 		},
 		EndUserHandlers: &EndUserHandlers{
 			UploadFileController:     EndUser.NewFileController(fileModel, userModel, activityLogModel, encryptionService, shamirService, keyFragmentModel, compressionService, folderModel, rsService, serverMasterKeyModel),
@@ -140,6 +143,7 @@ func NewRouteHandlers(
 		PremiumUserHandlers: &PremiumUserHandlers{
 			FileRecoveryController:      PremiumUser.NewFileRecoveryController(fileModel),
 			AdvancedShareFileController: PremiumUser.NewShareFileController(fileModel, fileShareModel, keyFragmentModel, encryptionService, activityLogModel, rsService, userModel, serverMasterKeyModel, twoFactorService, emailService, compressionService),
+			UpdateBillingController:     PremiumUser.NewUpdateBillingController(billingModel),
 		},
 	}
 }
@@ -259,7 +263,7 @@ func setupEndUserRoutes(protected *gin.RouterGroup, handlers *EndUserHandlers) {
 
 }
 func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandlers) {
-	
+
 	recovery := premium.Group("/recovery")
 	{
 		recovery.GET("/files", handlers.FileRecoveryController.ListRecoverableFiles)
@@ -268,6 +272,11 @@ func setupPremiumUserRoutes(premium *gin.RouterGroup, handlers *PremiumUserHandl
 	shares := premium.Group("/shares")
 	{
 		shares.POST("/files/:id", handlers.AdvancedShareFileController.CreateShare)
+	}
+	billing := premium.Group("/billing")
+	{
+		billing.GET("/details", handlers.UpdateBillingController.GetBillingDetails)
+		billing.PUT("/details", handlers.UpdateBillingController.UpdateBillingDetails)
 	}
 }
 
@@ -307,5 +316,11 @@ func setupSysAdminRoutes(sysAdmin *gin.RouterGroup, handlers *SysAdminHandlers) 
 		reports.GET("/:id", handlers.ViewReportsController.GetReportDetails)
 		reports.PUT("/:id/status", handlers.ViewReportsController.UpdateReportStatus)
 		reports.GET("/stats", handlers.ViewReportsController.GetReportStats)
+	}
+	billing := sysAdmin.Group("/billing")
+	{
+		billing.GET("/records", handlers.ViewBillingRecordsController.GetAllBillingRecords)
+		billing.GET("/stats", handlers.ViewBillingRecordsController.GetBillingStats)
+		billing.GET("/expiring", handlers.ViewBillingRecordsController.GetExpiringSubscriptions)
 	}
 }
