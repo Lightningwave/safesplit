@@ -10,6 +10,7 @@ import ViewStorage from './SysAdmin/ViewStorage';
 import ViewDeletedAccounts from './SysAdmin/ViewDeletedAccounts';
 import ViewFeedback from './SysAdmin/ViewFeedback';
 import ViewReport from './SysAdmin/ViewReport';
+import ViewBillingRecords from './SysAdmin/ViewBillingRecords';
 
 const SysAdminDashboard = ({ user, onLogout }) => {
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
@@ -92,22 +93,24 @@ const SysAdminDashboard = ({ user, onLogout }) => {
 
   const renderMainContent = () => {
     switch (selectedSection) {
-      case 'Dashboard':
-        return renderDashboardContent();
-      case 'Account Management':
-        return <ViewUserAccounts selectedType={selectedUserType} />;
-      case 'View Storage':
-        return <ViewStorage />;
-      case 'Deleted Accounts':
-        return <ViewDeletedAccounts />;
-      case 'Feedback':
-        return <ViewFeedback feedbackType="feedback" />;
-      case 'Reports':
-        return <ViewReport feedbackType="suspicious_activity" />;
-      default:
-        return renderDashboardContent();
+        case 'Dashboard':
+            return renderDashboardContent();
+        case 'Account Management':
+            return <ViewUserAccounts selectedType={selectedUserType} />;
+        case 'View Storage':
+            return <ViewStorage />;
+        case 'Deleted Accounts':
+            return <ViewDeletedAccounts />;
+        case 'Feedback':
+            return <ViewFeedback feedbackType="feedback" />;
+        case 'Reports':
+            return <ViewReport feedbackType="suspicious_activity" />;
+        case 'Billing Records':
+            return <ViewBillingRecords />;
+        default:
+            return renderDashboardContent();
     }
-  };
+};
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -205,6 +208,15 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                   ${selectedSection === 'Reports' ? 'bg-gray-800' : ''}`}
               >
                 Suspicious Reports
+              </button>
+            </li>
+            <li>
+              <button 
+                onClick={() => setSelectedSection('Billing Records')}
+                className={`w-full text-left px-4 py-2 rounded transition-colors duration-200 hover:bg-gray-800
+                  ${selectedSection === 'Billing Records' ? 'bg-gray-800' : ''}`}
+              >
+                Billing Records
               </button>
             </li>
 
