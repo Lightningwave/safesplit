@@ -26,8 +26,8 @@ const SystemLogs = () => {
             }
 
             const data = await response.json();
-            setLogs(data.logs);
-            setFilteredLogs(data.logs);
+            setLogs(data.logs || []);
+            setFilteredLogs(data.logs || []);
             setError(null);
         } catch (err) {
             setError(err.message);
@@ -41,30 +41,44 @@ const SystemLogs = () => {
     }, []);
 
     useEffect(() => {
-        let result = [...logs];
+        const filterLogs = () => {
+            let result = [...logs];
 
-        if (filters.search) {
-            const searchTerm = filters.search.toLowerCase();
-            result = result.filter(log => 
-                log.error_message?.toLowerCase().includes(searchTerm) ||
-                log.ip_address?.toLowerCase().includes(searchTerm) ||
-                log.user_id?.toString().toLowerCase().includes(searchTerm)
-            );
-        }
+            if (filters.search.trim()) {
+                const searchTerms = filters.search.toLowerCase().split(' ').filter(term => term);
+                result = result.filter(log => {
+                    const searchableFields = [
+                        log.details,
+                        log.error_message,
+                        log.ip_address,
+                        log.user_id?.toString(),
+                        log.activity_type
+                    ].filter(Boolean); 
 
-        if (filters.activity_type) {
-            result = result.filter(log => 
-                log.activity_type === filters.activity_type
-            );
-        }
+                    return searchTerms.every(term =>
+                        searchableFields.some(field =>
+                            field.toLowerCase().includes(term)
+                        )
+                    );
+                });
+            }
 
-        if (filters.user_id) {
-            result = result.filter(log => 
-                log.user_id?.toString().includes(filters.user_id)
-            );
-        }
+            if (filters.activity_type) {
+                result = result.filter(log => 
+                    log.activity_type === filters.activity_type
+                );
+            }
 
-        setFilteredLogs(result);
+            if (filters.user_id.trim()) {
+                result = result.filter(log => 
+                    log.user_id?.toString() === filters.user_id.trim()
+                );
+            }
+
+            setFilteredLogs(result);
+        };
+
+        filterLogs();
     }, [filters, logs]);
 
     const handleFilterChange = (field, value) => {
@@ -92,15 +106,18 @@ const SystemLogs = () => {
         <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b border-gray-200">
                 <div className="flex gap-4">
-                    <input
-                        type="text"
-                        placeholder="Search logs..."
-                        className="flex-1 p-2 border rounded-md"
-                        value={filters.search}
-                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                    />
+                    <div className="flex-1 relative">
+                        <input
+                            type="text"
+                            placeholder="Search logs..."
+                            className="w-full p-2 pr-10 border rounded-md"
+                            value={filters.search}
+                            onChange={(e) => handleFilterChange('search', e.target.value)}
+                        />
+                        <Search className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+                    </div>
                     <select
-                        className="p-2 border rounded-md"
+                        className="p-2 border rounded-md min-w-[160px]"
                         value={filters.activity_type}
                         onChange={(e) => handleFilterChange('activity_type', e.target.value)}
                     >
@@ -115,7 +132,7 @@ const SystemLogs = () => {
                     <input
                         type="text"
                         placeholder="User ID"
-                        className="p-2 border rounded-md"
+                        className="p-2 border rounded-md w-32"
                         value={filters.user_id}
                         onChange={(e) => handleFilterChange('user_id', e.target.value)}
                     />
@@ -145,8 +162,7 @@ const SystemLogs = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
-                                  {log.details || log.error_message || '-'}
-
+                                    {log.details || log.error_message || '-'}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-900">
                                     {log.ip_address}
