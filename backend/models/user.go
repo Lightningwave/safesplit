@@ -7,8 +7,8 @@ import (
 	"safesplit/services"
 	"safesplit/utils"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -146,40 +146,45 @@ func (m *UserModel) Create(user *User) (*User, error) {
 
 // Authenticate checks the provided email and password
 func (m *UserModel) Authenticate(email, password string) (*User, error) {
-    var user User
-    if err := m.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error; err != nil {
-        return nil, errors.New("invalid credentials")
-    }
+	var user User
+	if err := m.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error; err != nil {
+		return nil, errors.New("invalid credentials")
+	}
 
-    // Prevent super admin login through regular endpoint
-    if user.Role == RoleSuperAdmin {
-        return nil, errors.New("please use super admin login portal")
-    }
+	// Prevent super admin login through regular endpoint
+	if user.Role == RoleSuperAdmin {
+		return nil, errors.New("please use super admin login portal")
+	}
 
-    // Check if account is locked
-    if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
-        remainingTime := user.AccountLockedUntil.Sub(time.Now())
-        return nil, fmt.Errorf("account locked for %d minutes due to too many failed attempts", int(remainingTime.Minutes()))
-    }
+	// Check if account is locked
+	if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
+		remainingTime := user.AccountLockedUntil.Sub(time.Now())
+		return nil, fmt.Errorf("account locked for %d minutes due to too many failed attempts", int(remainingTime.Minutes()))
+	}
 
-    // Verify password
-    if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-        lockErr := m.handleFailedLogin(&user)
-        if lockErr != nil && strings.Contains(lockErr.Error(), "account locked") {
-            return nil, lockErr
-        }
-        remainingAttempts := 5 - user.FailedLoginAttempts
-        if remainingAttempts > 0 {
-            return nil, fmt.Errorf("invalid credentials - %d attempts remaining", remainingAttempts)
-        }
-        return nil, errors.New("invalid credentials")
-    }
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		lockErr := m.handleFailedLogin(&user)
+		if lockErr != nil && strings.Contains(lockErr.Error(), "account locked") {
+			return nil, lockErr
+		}
+		remainingAttempts := 5 - user.FailedLoginAttempts
+		if remainingAttempts > 0 {
+			return nil, fmt.Errorf("invalid credentials - %d attempts remaining", remainingAttempts)
+		}
+		return nil, errors.New("invalid credentials")
+	}
 
-    if user.Role == RoleSysAdmin || user.TwoFactorEnabled {
-        return &user, nil
-    }
+	updatedUser, err := m.handleSuccessfulLogin(&user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update login status: %w", err)
+	}
 
-    return m.handleSuccessfulLogin(&user)
+	if updatedUser.Role == RoleSysAdmin || updatedUser.TwoFactorEnabled {
+		return updatedUser, nil
+	}
+
+	return updatedUser, nil
 }
 
 // handleSuccessfulLogin updates user state after successful login
@@ -190,7 +195,7 @@ func (m *UserModel) handleSuccessfulLogin(user *User) (*User, error) {
 	user.LastLogin = &now
 
 	if err := m.db.Save(user).Error; err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to update login state: %w", err)
 	}
 
 	return user, nil
@@ -198,24 +203,24 @@ func (m *UserModel) handleSuccessfulLogin(user *User) (*User, error) {
 
 // handleFailedLogin manages failed login attempts and account lockout
 func (m *UserModel) handleFailedLogin(user *User) error {
-    user.FailedLoginAttempts++
+	user.FailedLoginAttempts++
 
-    var lockTime *time.Time
-    if user.FailedLoginAttempts >= 5 {
-        t := time.Now().Add(30 * time.Minute)
-        lockTime = &t
-        user.AccountLockedUntil = lockTime
-    }
+	var lockTime *time.Time
+	if user.FailedLoginAttempts >= 5 {
+		t := time.Now().Add(30 * time.Minute)
+		lockTime = &t
+		user.AccountLockedUntil = lockTime
+	}
 
-    if err := m.db.Save(user).Error; err != nil {
-        return fmt.Errorf("failed to update login attempts: %w", err)
-    }
+	if err := m.db.Save(user).Error; err != nil {
+		return fmt.Errorf("failed to update login attempts: %w", err)
+	}
 
-    if lockTime != nil {
-        return fmt.Errorf("account locked until %v due to too many failed attempts", lockTime)
-    }
+	if lockTime != nil {
+		return fmt.Errorf("account locked until %v due to too many failed attempts", lockTime)
+	}
 
-    return nil
+	return nil
 }
 
 // UpdateMasterKey updates the user's master key material
@@ -258,20 +263,29 @@ func (m *UserModel) AuthenticateSuperAdmin(email, password string) (*User, error
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Check if account is locked
 	if user.AccountLockedUntil != nil && user.AccountLockedUntil.After(time.Now()) {
-		return nil, fmt.Errorf("account locked until %v", user.AccountLockedUntil)
+		remainingTime := user.AccountLockedUntil.Sub(time.Now())
+		return nil, fmt.Errorf("account locked for %d minutes due to too many failed attempts", int(remainingTime.Minutes()))
 	}
 
-	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		if err := m.handleFailedLogin(&user); err != nil {
-			return nil, err
+		lockErr := m.handleFailedLogin(&user)
+		if lockErr != nil && strings.Contains(lockErr.Error(), "account locked") {
+			return nil, lockErr
+		}
+		remainingAttempts := 5 - user.FailedLoginAttempts
+		if remainingAttempts > 0 {
+			return nil, fmt.Errorf("invalid credentials - %d attempts remaining", remainingAttempts)
 		}
 		return nil, errors.New("invalid credentials")
 	}
 
-	return m.handleSuccessfulLogin(&user)
+	updatedUser, err := m.handleSuccessfulLogin(&user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update login status: %w", err)
+	}
+
+	return updatedUser, nil
 }
 
 // FindByEmail retrieves a user by their email

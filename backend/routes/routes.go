@@ -95,7 +95,7 @@ func NewRouteHandlers(
 ) *RouteHandlers {
 	superAdminLoginController := SuperAdmin.NewLoginController(userModel)
 	return &RouteHandlers{
-		LoginController:           controllers.NewLoginController(userModel, billingModel),
+		LoginController:           controllers.NewLoginController(userModel, billingModel, activityLogModel),
 		SuperAdminLoginController: superAdminLoginController,
 		CreateAccountController:   controllers.NewCreateAccountController(userModel, passwordHistoryModel),
 		TwoFactorController:       EndUser.NewTwoFactorController(userModel, twoFactorService),
