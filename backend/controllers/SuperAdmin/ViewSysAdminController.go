@@ -18,14 +18,12 @@ func NewViewSysAdminController(userModel *models.UserModel) *ViewSysAdminControl
 }
 
 func (c *ViewSysAdminController) ListSysAdmins(ctx *gin.Context) {
-	// Get the authenticated super admin from context
 	superAdmin, exists := ctx.Get("user")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		return
 	}
 
-	// Get list of sys admins
 	sysAdmins, err := c.userModel.GetSysAdmins(superAdmin.(*models.User))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
