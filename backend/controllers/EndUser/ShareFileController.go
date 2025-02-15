@@ -75,14 +75,12 @@ type TwoFactorRequest struct {
 }
 
 func (c *ShareFileController) CreateShare(ctx *gin.Context) {
-	// Get file ID from URL parameter
 	fileID := ctx.Param("id")
 	if fileID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "File ID is required"})
 		return
 	}
 
-	// Convert string ID to uint
 	id, err := strconv.ParseUint(fileID, 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
@@ -161,7 +159,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 		return
 	}
 
-	// Get base URL from environment variable
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://safesplit.xyz"
@@ -171,7 +168,6 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	shareURL := fmt.Sprintf("%s/api/files/share/%s", baseURL, share.ShareLink)
 
 	if req.ShareType == models.RecipientShare {
-		// For recipient shares, use the frontend URL
 		shareURL = fmt.Sprintf("%s/protected-share/%s", baseURL, share.ShareLink)
 
 		emailBody := fmt.Sprintf(`Hello,
@@ -308,7 +304,6 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 
 	// Validate share based on type
 	if share.ShareType == models.RecipientShare {
-		// Validate password only
 		share, validationErr := c.fileShareModel.ValidateRecipientShare(shareLink, req.Password)
 		if validationErr != nil {
 			ctx.JSON(http.StatusUnauthorized, gin.H{

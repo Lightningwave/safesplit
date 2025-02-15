@@ -210,7 +210,7 @@ func (c *ShareFileController) CreateShare(ctx *gin.Context) {
 	if req.ShareType == models.RecipientShare {
 		baseURL := os.Getenv("BASE_URL")
 		if baseURL == "" {
-			baseURL = "https://safesplit.xyz/"
+			baseURL = "https://safesplit.xyz"
 		}
 
 		shareURL := fmt.Sprintf("%s/protected-share/%s", baseURL, share.ShareLink)
@@ -250,10 +250,9 @@ SafeSplit Team`, user.Username, file.OriginalName, shareURL, req.Email, req.Pass
 
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://safesplit.xyz/"
+		baseURL = "https://safesplit.xyz"
 	}
 
-	// Determine share path based on type
 	sharePath := "/premium/share/"
 	if req.ShareType == models.RecipientShare {
 		sharePath = "/protected-share/"
@@ -326,7 +325,6 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 	}
 
 	if share.ShareType == models.RecipientShare {
-		// Validate password only - no email needed since we have the share
 		share, validationErr := c.fileShareModel.ValidateRecipientShare(shareLink, req.Password)
 		if validationErr != nil {
 			ctx.JSON(http.StatusUnauthorized, gin.H{
