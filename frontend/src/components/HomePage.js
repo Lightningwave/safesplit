@@ -90,7 +90,7 @@ function HomePage() {
         <div className="w-full max-w-[1200px] mx-auto">
           <div className="relative w-full pt-[56.25%]">
             <iframe
-              src="https://www.youtube.com/embed/2uuR7ziG2BM"
+              src="https://www.youtube.com/embed/0SLUr2ZKELU"
               title="Safesplit Demo"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
