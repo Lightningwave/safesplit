@@ -76,7 +76,6 @@ func (s *SMTPEmailService) connect() error {
         return fmt.Errorf("failed to create SMTP client: %w", err)
     }
 
-    // Authenticate
     if err := client.Auth(s.auth); err != nil {
         client.Close()
         return fmt.Errorf("authentication failed: %w", err)

@@ -36,7 +36,6 @@ const SysAdminDashboard = ({ user, onLogout }) => {
                        Array.isArray(data.data) ? data.data :
                        Array.isArray(data) ? data : [];
 
-      // Sort users by updated_at timestamp
       const sortedUsers = usersList
         .filter(user => user && user.updated_at)
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
@@ -63,9 +62,7 @@ const SysAdminDashboard = ({ user, onLogout }) => {
     if (!viewedUser) return;
     
     setRecentUpdatedUsers(prev => {
-      // Remove the user if already in the list
       const filteredUsers = prev.filter(u => u.id !== viewedUser.id);
-      // Add the user at the beginning and maintain sorting
       const updatedUsers = [viewedUser, ...filteredUsers]
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
         .slice(0, 5);

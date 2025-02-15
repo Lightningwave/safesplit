@@ -29,7 +29,6 @@ func NewMultiS3StorageService(configs []struct {
 	nodes := make([]S3Node, len(configs))
 
 	for i, cfg := range configs {
-		// Load region-specific configuration
 		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 			return aws.Endpoint{
 				URL:           fmt.Sprintf("https://s3.%s.amazonaws.com", cfg.Region),
@@ -62,7 +61,6 @@ func NewMultiS3StorageService(configs []struct {
 	}, nil
 }
 
-// Rest of the methods remain the same...
 
 func (s *MultiS3StorageService) NodeCount() int {
 	return len(s.nodes)

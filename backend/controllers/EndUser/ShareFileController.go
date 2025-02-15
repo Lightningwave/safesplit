@@ -257,7 +257,6 @@ func (c *ShareFileController) AccessShare(ctx *gin.Context) {
 		return
 	}
 
-	// Handle POST request
 	var req AccessShareRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{

@@ -15,9 +15,9 @@ import (
 type EncryptionType string
 
 const (
-	StandardEncryption EncryptionType = "standard" // AES-256-GCM
-	ChaCha20           EncryptionType = "chacha20" // ChaCha20-Poly1305
-	Twofish            EncryptionType = "twofish"  // Twofish
+	StandardEncryption EncryptionType = "standard"
+	ChaCha20           EncryptionType = "chacha20" 
+	Twofish            EncryptionType = "twofish"  
 )
 
 type File struct {
@@ -85,7 +85,6 @@ func (f *File) ValidateEncryption() error {
 	}
 }
 
-// File CRUD operations
 func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 	if file.UserID == 0 {
 		return fmt.Errorf("user ID is required")
@@ -95,12 +94,10 @@ func (m *FileModel) CreateFile(tx *gorm.DB, file *File) error {
 		return fmt.Errorf("file name is required")
 	}
 
-	// Add encryption validation
 	if err := file.ValidateEncryption(); err != nil {
 		return err
 	}
 
-	// Add IV size validation
 	if err := file.ValidateIVSize(); err != nil {
 		return err
 	}
@@ -123,22 +120,18 @@ func (m *FileModel) CreateFileWithShards(
 	serverKeyModel *ServerMasterKeyModel,
 ) error {
 	return withTransactionRetry(m.db, 3, func(tx *gorm.DB) error {
-		// 1. Update user storage first to lock the user row
 		if err := m.UpdateUserStorage(tx, file.UserID, file.Size); err != nil {
 			return fmt.Errorf("failed to update storage usage: %w", err)
 		}
 
-		// 2. Create file record
 		if err := m.CreateFile(tx, file); err != nil {
 			return fmt.Errorf("failed to create file record: %w", err)
 		}
 
-		// 3. Store shards
 		if err := m.rsService.StoreShards(file.ID, &services.FileShards{Shards: shards}); err != nil {
 			return fmt.Errorf("failed to store shards: %w", err)
 		}
 
-		// 4. Save key fragments
 		if err := keyFragmentModel.SaveKeyFragments(tx, file.ID, shares, file.UserID, serverKeyModel); err != nil {
 			m.rsService.DeleteShards(file.ID) // clean up
 			return fmt.Errorf("failed to save key fragments: %w", err)
@@ -319,7 +312,6 @@ func (m *FileModel) GetFileForDownload(fileID, userID uint) (*File, error) {
 	return &file, nil
 }
 
-// File listing methods
 func (m *FileModel) ListUserFiles(userID uint) ([]File, error) {
 	var files []File
 	err := m.db.Where("user_id = ? AND is_deleted = ?", userID, false).
@@ -716,7 +708,6 @@ func (m *FileModel) RecoverFile(fileID, userID uint) error {
 	return nil
 }
 
-// GetUserFileCount returns the total number of non-deleted files for a user
 func (m *FileModel) GetUserFileCount(userID uint) (int64, error) {
 	var count int64
 	err := m.db.Model(&File{}).
@@ -762,10 +753,8 @@ func (m *FileModel) PermanentlyDeleteFile(fileID, userID uint, ipAddress string)
     log.Printf("Found file to permanently delete - ID: %d, IsSharded: %v, Size: %d bytes",
         file.ID, file.IsSharded, file.Size)
 
-    // Handle physical data deletion
     if file.IsSharded {
         log.Printf("Deleting Reed-Solomon shards for file %d", fileID)
-        // Delete shards
         if err := m.rsService.DeleteShards(fileID); err != nil {
             tx.Rollback()
             log.Printf("Failed to delete shards - File ID: %d, Error: %v", fileID, err)
@@ -773,35 +762,29 @@ func (m *FileModel) PermanentlyDeleteFile(fileID, userID uint, ipAddress string)
         }
         log.Printf("Successfully deleted shards for file %d", fileID)
     } else if file.FilePath != "" {
-        // Delete regular file if it exists
         if err := os.Remove(file.FilePath); err != nil && !os.IsNotExist(err) {
             log.Printf("Failed to delete file content - Path: %s, Error: %v", file.FilePath, err)
-            // Don't rollback here as we want to continue with database cleanup
         }
     }
 
-    // Delete related key fragments
     if err := tx.Where("file_id = ?", fileID).Delete(&KeyFragment{}).Error; err != nil {
         tx.Rollback()
         log.Printf("Failed to delete key fragments - File ID: %d, Error: %v", fileID, err)
         return fmt.Errorf("failed to delete key fragments: %w", err)
     }
 
-    // Delete related activity logs
     if err := tx.Where("file_id = ?", fileID).Delete(&ActivityLog{}).Error; err != nil {
         tx.Rollback()
         log.Printf("Failed to delete activity logs - File ID: %d, Error: %v", fileID, err)
         return fmt.Errorf("failed to delete activity logs: %w", err)
     }
 
-    // Finally, delete the file record
     if err := tx.Delete(&file).Error; err != nil {
         tx.Rollback()
         log.Printf("Failed to delete file record - ID: %d, Error: %v", fileID, err)
         return fmt.Errorf("failed to delete file record: %w", err)
     }
 
-    // Log the permanent deletion activity (in a separate table for audit history)
     permanentDeletionLog := &PermanentDeletionLog{
         UserID:       userID,
         FileName:     file.Name,

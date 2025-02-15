@@ -20,7 +20,7 @@ const ViewStorage = () => {
       if (!response.ok) throw new Error('Failed to fetch storage statistics');
       const data = await response.json();
       setStorageStats(data.storage_stats);
-      setUsers(data.storage_stats.users || []); // Ensure users array exists
+      setUsers(data.storage_stats.users || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -32,7 +32,6 @@ const ViewStorage = () => {
     fetchStorageStats();
   }, []);
 
-  // Helper function to convert bytes to GB with two decimal places
   const bytesToGB = (bytes) => {
     return (bytes / 1024 / 1024 / 1024).toFixed(2);
   };

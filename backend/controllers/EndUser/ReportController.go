@@ -9,13 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ReportController handles suspicious activity reporting
 type ReportController struct {
 	feedbackModel *models.FeedbackModel
 	fileModel     *models.FileModel
 }
 
-// NewReportController creates a new ReportController instance
 func NewReportController(feedbackModel *models.FeedbackModel, fileModel *models.FileModel) *ReportController {
 	return &ReportController{
 		feedbackModel: feedbackModel,
@@ -23,19 +21,16 @@ func NewReportController(feedbackModel *models.FeedbackModel, fileModel *models.
 	}
 }
 
-// FileReportRequest represents a request to report a suspicious file
 type FileReportRequest struct {
 	FileID  uint   `json:"file_id" binding:"required"`
 	Message string `json:"message" binding:"required,min=10"`
 }
 
-// ShareReportRequest represents a request to report a suspicious share link
 type ShareReportRequest struct {
 	ShareLink string `json:"share_link" binding:"required"`
 	Message   string `json:"message" binding:"required,min=10"`
 }
 
-// ReportFile handles reporting of suspicious files
 func (c *ReportController) ReportFile(ctx *gin.Context) {
 	user, exists := ctx.Get("user")
 	if !exists {
@@ -56,7 +51,6 @@ func (c *ReportController) ReportFile(ctx *gin.Context) {
 		return
 	}
 
-	// Verify file exists
 	file, err := c.fileModel.GetFileByID(req.FileID)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
@@ -94,7 +88,6 @@ func (c *ReportController) ReportFile(ctx *gin.Context) {
 	})
 }
 
-// ReportShare handles reporting of suspicious share links
 func (c *ReportController) ReportShare(ctx *gin.Context) {
 	user, exists := ctx.Get("user")
 	if !exists {
@@ -143,7 +136,6 @@ func (c *ReportController) ReportShare(ctx *gin.Context) {
 	})
 }
 
-// GetUserReports retrieves all suspicious activity reports submitted by the user
 func (c *ReportController) GetUserReports(ctx *gin.Context) {
 	user, exists := ctx.Get("user")
 	if !exists {

@@ -82,27 +82,25 @@ func (c *MassDownloadFileController) MassDownload(ctx *gin.Context) {
 	// Process files concurrently
 	var wg sync.WaitGroup
 	results := make(chan DownloadResult, len(fileIDs))
-	semaphore := make(chan struct{}, 5) // Limit concurrent downloads
+	semaphore := make(chan struct{}, 5) 
 
 	for _, fileID := range fileIDs {
 		wg.Add(1)
 		go func(id uint) {
 			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire semaphore
-			defer func() { <-semaphore }() // Release semaphore
+			semaphore <- struct{}{}       
+			defer func() { <-semaphore }() 
 
 			result := c.processDownload(ctx, currentUser, id)
 			results <- result
 		}(fileID)
 	}
 
-	// Wait for all downloads to complete
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect results
 	downloadResults := make([]DownloadResult, 0)
 	totalFiles := 0
 	totalSize := int64(0)

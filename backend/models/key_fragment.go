@@ -30,13 +30,11 @@ type KeyFragment struct {
 	ServerKeyID      *string
 }
 
-// FragmentData represents a fragment with its data loaded from node storage
 type FragmentData struct {
 	KeyFragment
 	Data []byte
 }
 
-// StorageInterface defines the methods required for storage
 type StorageInterface interface {
 	StoreFragment(nodeIndex int, fragmentPath string, data []byte) error
 	RetrieveFragment(nodeIndex int, fragmentPath string) ([]byte, error)
@@ -66,14 +64,11 @@ func (m *KeyFragmentModel) GetKeyFragments(fileID uint) ([]FragmentData, error) 
 		return nil, fmt.Errorf("failed to retrieve fragment metadata: %w", err)
 	}
 
-	// We'll store only successfully retrieved fragments here
 	var fragmentsWithData []FragmentData
 
-	// Attempt to load each fragment from node storage
 	for _, fragment := range fragments {
 		data, err := m.storage.RetrieveFragment(fragment.NodeIndex, fragment.FragmentPath)
 		if err != nil {
-			// Instead of returning an error, just log and skip
 			log.Printf(
 				"Warning: skipping missing fragment (file_id=%d, index=%d, node=%d, path=%s): %v",
 				fragment.FileID, fragment.FragmentIndex, fragment.NodeIndex, fragment.FragmentPath, err,
@@ -214,7 +209,6 @@ func (m *KeyFragmentModel) SaveKeyFragments(tx *gorm.DB, fileID uint, shares []s
             i, share.Index, holderType, nodeIndex)
     }
 
-    // Save metadata to database
     if err := tx.Create(&fragments).Error; err != nil {
         return fmt.Errorf("failed to save fragment metadata: %w", err)
     }
@@ -235,7 +229,6 @@ func (m *KeyFragmentModel) GetFragmentsByType(fileID uint, holderType HolderType
 	for _, fragment := range fragments {
 		data, err := m.storage.RetrieveFragment(fragment.NodeIndex, fragment.FragmentPath)
 		if err != nil {
-			// If you want to skip missing, do so here
 			log.Printf("Warning: skipping missing %s fragment (file_id=%d, index=%d): %v",
 				holderType, fileID, fragment.FragmentIndex, err)
 			continue
@@ -257,7 +250,6 @@ func (m *KeyFragmentModel) GetServerFragmentsForFile(fileID uint) ([]FragmentDat
 	return m.GetFragmentsByType(fileID, ServerHolder)
 }
 
-// DeleteFragments removes both metadata and stored fragments
 func (m *KeyFragmentModel) DeleteFragments(fileID uint) error {
 	var fragments []KeyFragment
 	if err := m.db.Where("file_id = ?", fileID).Find(&fragments).Error; err != nil {

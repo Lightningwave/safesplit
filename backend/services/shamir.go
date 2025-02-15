@@ -131,7 +131,6 @@ func (s *ShamirService) RecombineKey(shares []KeyShare, k int) ([]byte, error) {
 			continue
 		}
 
-		// Prepend x-coordinate to create Shamir share format
 		share33 := append([]byte{byte(share.Index)}, decodedValue...)
 		rawShares = append(rawShares, share33)
 
@@ -145,7 +144,6 @@ func (s *ShamirService) RecombineKey(shares []KeyShare, k int) ([]byte, error) {
 			len(rawShares), k)
 	}
 
-	// Log shares before reconstruction
 	for i, raw := range rawShares {
 		log.Printf("Share %d: x-coordinate=%d, data length=%d bytes", i, raw[0], len(raw)-1)
 	}
@@ -183,7 +181,6 @@ func (s *ShamirService) testReconstruction(shares []KeyShare, originalKey []byte
 	log.Printf("  Original key    : %x", originalKey)
 	log.Printf("  Reconstructed key: %x", reconstructed)
 
-	// Compare reconstructed key with original
 	if len(reconstructed) != len(originalKey) {
 		log.Printf("Length mismatch: got %d, want %d", len(reconstructed), len(originalKey))
 		return false, nil
@@ -216,7 +213,6 @@ func (s *ShamirService) ValidateShares(shares []KeyShare) error {
 		log.Printf("- Node: %d", share.NodeIndex)
 		log.Printf("- Path: %s", share.FragmentPath)
 
-		// Validate index
 		if share.Index < 1 || share.Index > 255 {
 			log.Printf("Error: Invalid share index: %d", share.Index)
 			return fmt.Errorf("invalid share index: %d", share.Index)
@@ -227,13 +223,11 @@ func (s *ShamirService) ValidateShares(shares []KeyShare) error {
 		}
 		seenIndices[share.Index] = true
 
-		// Validate node assignment
 		if share.NodeIndex >= s.nodeCount {
 			log.Printf("Error: Invalid node index: %d", share.NodeIndex)
 			return fmt.Errorf("invalid node index: %d", share.NodeIndex)
 		}
 
-		// Try to decode the hex value
 		if _, err := hex.DecodeString(share.Value); err != nil {
 			log.Printf("Error: Invalid hex value: %v", err)
 			return fmt.Errorf("invalid hex value in share %d: %v", i, err)

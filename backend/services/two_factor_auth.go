@@ -38,7 +38,6 @@ func (r *RateLimiter) Allow(userID uint) bool {
 	now := time.Now()
 	window := now.Add(-time.Minute)
 
-	// Clear old requests
 	if times, exists := r.requests[userID]; exists {
 		valid := make([]time.Time, 0)
 		for _, t := range times {

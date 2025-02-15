@@ -14,14 +14,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// Subscription status constants
 const (
 	SubscriptionStatusFree      = "free"
 	SubscriptionStatusPremium   = "premium"
 	SubscriptionStatusCancelled = "cancelled"
 )
 
-// Define user roles as constants
 const (
 	RoleEndUser     = "end_user"
 	RolePremiumUser = "premium_user"
@@ -44,10 +42,8 @@ type UserStorageDetails struct {
 	StorageTotal       int64  `json:"storage_total"`
 }
 
-// DefaultStorageQuota represents 5GB in bytes for free users
 const DefaultStorageQuota = int64(5 * 1024 * 1024 * 1024)
 
-// PremiumStorageQuota represents 50GB in bytes for premium users
 const PremiumStorageQuota = int64(50 * 1024 * 1024 * 1024)
 
 type User struct {
@@ -65,7 +61,7 @@ type User struct {
 	WriteAccess         bool       `json:"write_access" gorm:"default:true"`
 	TwoFactorEnabled    bool       `json:"two_factor_enabled" gorm:"default:false"`
 	TwoFactorSecret     string     `json:"-" gorm:"column:two_factor_secret"`
-	StorageQuota        int64      `json:"storage_quota" gorm:"default:5368709120"` // 5GB default
+	StorageQuota        int64      `json:"storage_quota" gorm:"default:5368709120"` 
 	StorageUsed         int64      `json:"storage_used" gorm:"default:0"`
 	SubscriptionStatus  string     `json:"subscription_status" gorm:"type:enum('free','premium','cancelled');default:'free'"`
 	IsActive            bool       `json:"is_active" gorm:"default:true"`

@@ -16,14 +16,14 @@ function AboutPage() {
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
       image: "/Sample5.png",
-      github: "https://github.com/username2"
+      github: "https://github.com/xiaojuan-c"
     },
     {
       name: "LAI NIM LOONG RYAN",
       role: "Frontend Developer",
       bio: "Creates and updates essential documentation. Designs wireframe and front-end of the website.",
       image: "/Sample3.png",
-      github: "https://github.com/username3"
+      github: "https://github.com/Nimloongs "
     },
     {
       name: "PANG WAI PIN",
@@ -37,7 +37,7 @@ function AboutPage() {
       role: "Full Stack Developer",
       bio: "Creates and updates essential documentation. Develops both front-end and backend components of the website.",
       image: "/Sample2.png",
-      github: "https://github.com/username5"
+      github: "https://github.com/Lightningwave"
     },
     {
       name: "ZENG LIHONG",

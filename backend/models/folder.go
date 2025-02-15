@@ -65,7 +65,6 @@ func (m *FolderModel) CreateFolder(folder *Folder) error {
 		return fmt.Errorf("folder name is required")
 	}
 
-	// If parent folder is specified, verify it exists and belongs to the user
 	if folder.ParentFolderID != nil {
 		var parentFolder Folder
 		if err := m.db.Where("id = ? AND user_id = ?", folder.ParentFolderID, folder.UserID).
@@ -94,10 +93,8 @@ func (m *FolderModel) UpdateFolder(folder *Folder) error {
 
 // Delete folder and all its contents
 func (m *FolderModel) DeleteFolder(folderID, userID uint) error {
-	// Start transaction
 	tx := m.db.Begin()
 
-	// Archive the folder and all subfolders
 	if err := tx.Model(&Folder{}).
 		Where("id = ? OR parent_folder_id = ?", folderID, folderID).
 		Update("is_archived", true).Error; err != nil {
@@ -105,7 +102,6 @@ func (m *FolderModel) DeleteFolder(folderID, userID uint) error {
 		return fmt.Errorf("failed to archive folder: %w", err)
 	}
 
-	// Mark all files in the folder as deleted
 	if err := tx.Model(&File{}).
 		Where("folder_id = ?", folderID).
 		Updates(map[string]interface{}{
@@ -143,7 +139,7 @@ func (m *FolderModel) GetFolderPath(folderID uint) ([]Folder, error) {
 // CreateFolderPath creates the folder hierarchy if it doesn't exist and returns the final folder ID
 func (m *FolderModel) CreateFolderPath(userID uint, folderPath string) (*uint, error) {
 	if folderPath == "" || folderPath == "/" {
-		return nil, nil // Root folder
+		return nil, nil 
 	}
 
 	tx := m.db.Begin()
@@ -162,7 +158,6 @@ func (m *FolderModel) CreateFolderPath(userID uint, folderPath string) (*uint, e
 			userID, folderName, currentParentID, false).First(&existingFolder).Error
 
 		if err == gorm.ErrRecordNotFound {
-			// Create new folder
 			newFolder := &Folder{
 				UserID:         userID,
 				Name:           folderName,
