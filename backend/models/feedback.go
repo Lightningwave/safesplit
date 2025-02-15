@@ -128,7 +128,7 @@ func (m *FeedbackModel) GetByType(feedbackType FeedbackType) ([]Feedback, error)
 func (m *FeedbackModel) GetPendingCount() (int64, error) {
 	var count int64
 	err := m.db.Model(&Feedback{}).
-		Where("status = ?", FeedbackStatusPending).
+		Where("status = ? AND type = ?", FeedbackStatusPending, FeedbackTypeFeedback).
 		Count(&count).Error
 	return count, err
 }
