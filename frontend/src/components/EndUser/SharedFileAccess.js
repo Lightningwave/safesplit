@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Download, Lock, KeyRound } from 'lucide-react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -16,22 +16,70 @@ const SharedFileAccess = () => {
     const isPremiumShare = location.pathname.includes('/premium/share/');
     const isProtectedShare = location.pathname.includes('/protected-share/');
 
-    useEffect(() => {
-        fetchFileInfo();
-    }, []);
-
-    const fetchFileInfo = async () => {
+    const fetchFileInfo = useCallback(async () => {
+        if (!shareId) return;
+        
         try {
             const endpoint = `/api/${isPremiumShare ? 'premium/shares' : 'files/share'}/${shareId}`;
             const response = await fetch(endpoint);
             if (response.ok) {
                 const data = await response.json();
-                setFileInfo(data.data);
+                setFileInfo(prev => {
+                    if (JSON.stringify(prev) !== JSON.stringify(data.data)) {
+                        return data.data;
+                    }
+                    return prev;
+                });
             }
         } catch (error) {
             console.error('Error fetching file info:', error);
         }
-    };
+    }, [shareId, isPremiumShare]);
+
+    useEffect(() => {
+        fetchFileInfo();
+
+        let intervalId;
+        if (isPremiumShare && shareId) {
+            intervalId = setInterval(fetchFileInfo, 5000);
+        }
+
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [fetchFileInfo, isPremiumShare, shareId]);
+
+    const handleDownload = useCallback(async (response) => {
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition');
+        let filename = 'download';
+        
+        if (disposition) {
+            const utf8FilenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf8FilenameMatch) {
+                filename = decodeURIComponent(utf8FilenameMatch[1]);
+            } else {
+                const asciiFilenameMatch = disposition.match(/filename="([^"]+)"/i);
+                if (asciiFilenameMatch) {
+                    filename = asciiFilenameMatch[1];
+                }
+            }
+        }
+    
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await fetchFileInfo();
+    }, [fetchFileInfo]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -50,7 +98,6 @@ const SharedFileAccess = () => {
     
             const contentType = response.headers.get('Content-Type');
     
-            // If response is JSON
             if (contentType && contentType.includes('application/json')) {
                 const data = await response.json();
                 
@@ -62,13 +109,9 @@ const SharedFileAccess = () => {
                     setShowVerification(true);
                     return;
                 }
-            } 
-            // If response is a file
-            else if (response.ok) {
+            } else if (response.ok) {
                 await handleDownload(response);
-            } 
-            // If error response
-            else {
+            } else {
                 throw new Error('Failed to access file');
             }
     
@@ -99,19 +142,14 @@ const SharedFileAccess = () => {
     
             const contentType = response.headers.get('Content-Type');
     
-            // If response is JSON (error case)
             if (contentType && contentType.includes('application/json')) {
                 const data = await response.json();
                 if (!response.ok) {
                     throw new Error(data.error || 'Verification failed');
                 }
-            }
-            // If response is a file
-            else if (response.ok) {
+            } else if (response.ok) {
                 await handleDownload(response);
-            }
-            // If error response
-            else {
+            } else {
                 throw new Error('Verification failed');
             }
     
@@ -122,60 +160,35 @@ const SharedFileAccess = () => {
         }
     };
     
-    const handleDownload = async (response) => {
-        const blob = await response.blob();
-        const disposition = response.headers.get('Content-Disposition');
-        let filename = 'download';
-        
-        if (disposition) {
-            const utf8FilenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-            if (utf8FilenameMatch) {
-                filename = decodeURIComponent(utf8FilenameMatch[1]);
-            } else {
-                const asciiFilenameMatch = disposition.match(/filename="([^"]+)"/i);
-                if (asciiFilenameMatch) {
-                    filename = asciiFilenameMatch[1];
-                }
-            }
-        }
-    
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-    };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
-                <div className="text-center">
-                    <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100 mb-4">
-                        {showVerification ? (
-                            <KeyRound className="h-6 w-6 text-blue-600" />
-                        ) : (
-                            <Lock className="h-6 w-6 text-blue-600" />
-                        )}
-                    </div>
-                    <h2 className="text-3xl font-bold text-gray-900">
-                        {showVerification ? 'Verify Access' : 'Access Shared File'}
-                    </h2>
-                    {fileInfo && (
-                        <div className="mt-2 text-sm text-gray-600">
-                            <p className="font-medium">{fileInfo.file_name}</p>
-                            <p>Size: {(fileInfo.file_size / 1024 / 1024).toFixed(2)} MB</p>
-                            {isPremiumShare && fileInfo.expires_at && (
-                                <p>Expires: {new Date(fileInfo.expires_at).toLocaleString()}</p>
-                            )}
-                            {isPremiumShare && fileInfo.max_downloads && (
-                                <p>Downloads: {fileInfo.download_count} / {fileInfo.max_downloads}</p>
+        
+            <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+                    <div className="text-center">
+                        <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100 mb-4">
+                            {showVerification ? (
+                                <KeyRound className="h-6 w-6 text-blue-600" />
+                            ) : (
+                                <Lock className="h-6 w-6 text-blue-600" />
                             )}
                         </div>
-                    )}
-                </div>
+                        <h2 className="text-3xl font-bold text-gray-900">
+                            {showVerification ? 'Verify Access' : 'Access Shared File'}
+                        </h2>
+                        {fileInfo && (
+                            <div className="mt-2 text-sm text-gray-600">
+                                <p className="font-medium">{fileInfo.file_name}</p>
+                                <p>Size: {(fileInfo.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                                {isPremiumShare && fileInfo.expires_at && (
+                                    <p>Expires: {new Date(fileInfo.expires_at).toLocaleString()}</p>
+                                )}
+                                {isPremiumShare && fileInfo.max_downloads && (
+                                    <p>Downloads: {fileInfo.download_count} / {fileInfo.max_downloads}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                 {error && (
                     <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
