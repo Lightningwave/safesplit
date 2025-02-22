@@ -18,7 +18,7 @@ const ClosureAlert = () => {
           </h2>
           <div className="text-gray-600 space-y-2">
             <p>
-              We regret to inform you that Safesplit will be permanently closing on March 20, 2024.
+              We regret to inform you that Safesplit will be permanently closing on March 20, 2025.
             </p>
             <p>
               Please ensure you have downloaded and secured all your files before this date. Thank you for your understanding and support.
