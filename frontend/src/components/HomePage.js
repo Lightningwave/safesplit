@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Upload, Lock, Shield, Check } from 'lucide-react';
+import ClosureAlert from './Closure';
 
 function HomePage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ function HomePage() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <ClosureAlert />
       <main className="flex-1">
         {/* Hero Section */}
         <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48">
